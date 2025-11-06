@@ -1,50 +1,54 @@
-document.addEventListener("DOMContentLoaded", function () {
-  const viewCategory = document.querySelector("#viewCategory");
-  const fileListContainer = document.querySelector("#fileList");
+document.addEventListener("DOMContentLoaded", () => {
+  const categorySel = document.getElementById("viewCategory");
+  const listEl      = document.getElementById("fileList");
+  if (!categorySel || !listEl) return;
 
-  viewCategory.addEventListener("change", function () {
-    const category = viewCategory.value;
-    listFilesInCategory(category);
-  });
+  categorySel.addEventListener("change", () => renderList(categorySel.value));
 
-  async function listFilesInCategory(category) {
-    fileListContainer.innerHTML = "🔄 Loading files...";
+  async function renderList(category) {
+    if (!category) { listEl.textContent = "Choose a category to see files."; return; }
 
-    const bucketUrl = "https://dev-feagans-capstone.s3.amazonaws.com";
-    const prefix = `uploadedfiles/${category}/`;
-    const listUrl = `${bucketUrl}?prefix=${encodeURIComponent(prefix)}`;
+    listEl.textContent = "Loading…";
+    const { bucketRest, websiteBase, prefixRoot } = window.APP;
+
+    const prefix = `${prefixRoot}${category}/`;
+    const url = `${bucketRest}?list-type=2&prefix=${encodeURIComponent(prefix)}`;
 
     try {
-      const response = await fetch(listUrl);
-      const text = await response.text();
+      const res = await fetch(url);
+      const text = await res.text();
+      const xml  = new DOMParser().parseFromString(text, "application/xml");
 
-      const parser = new DOMParser();
-      const xml = parser.parseFromString(text, "application/xml");
-      const keys = Array.from(xml.getElementsByTagName("Key"))
-        .map(el => el.textContent)
-        .filter(key => key !== prefix);
+      const keys = Array.from(xml.getElementsByTagName("Contents"))
+        .map(c => c.getElementsByTagName("Key")[0]?.textContent || "")
+        .filter(k => k.endsWith("/") === false); // ignore folder placeholders
 
       if (keys.length === 0) {
-        fileListContainer.innerHTML = "<p>No files found.</p>";
+        listEl.textContent = "No files found in this category.";
         return;
       }
 
       const ul = document.createElement("ul");
-      keys.forEach(key => {
-        const li = document.createElement("li");
+      keys.forEach(k => {
         const a = document.createElement("a");
-        a.href = `${bucketUrl}/${key}`;
-        a.textContent = key.replace(prefix, "");
+        a.href = `${websiteBase}/${k}`;     // public website URL
+        a.textContent = k.replace(prefix, "");
         a.target = "_blank";
+
+        const li = document.createElement("li");
         li.appendChild(a);
         ul.appendChild(li);
       });
 
-      fileListContainer.innerHTML = "";
-      fileListContainer.appendChild(ul);
-    } catch (err) {
-      console.error("Error fetching file list:", err);
-      fileListContainer.innerHTML = "<p>Error loading files.</p>";
+      listEl.innerHTML = "";
+      listEl.appendChild(ul);
+
+    } catch (e) {
+      console.error(e);
+      listEl.textContent = "Error loading files.";
     }
   }
+
+  // First render (if a category is preset)
+  renderList(categorySel.value);
 });

@@ -1,57 +1,74 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Feagans Capstone Project</title>
-  <link rel="stylesheet" href="style.css">
-  <script defer src="tabs.js"></script>
-  <script defer src="upload.js"></script>
-  <script defer src="view.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <h1>📘 Feagans Capstone Project</h1>
+  <header class="site-header">
+    <h1>Welcome to Feagans Capstone Project</h1>
+    <nav class="top-nav">
+      <button class="nav-btn" data-tab="upload">📤 Upload</button>
+      <button class="nav-btn" data-tab="view">📂 View Files</button>
+      <button class="nav-btn" data-tab="about">ℹ️ About</button>
+    </nav>
+  </header>
 
-  <div class="tab-buttons">
-    <button onclick="showTab('uploadTab')">📤 Upload</button>
-    <button onclick="showTab('viewTab')">📁 View Files</button>
-    <button onclick="showTab('aboutTab')">ℹ️ About</button>
-  </div>
+  <main class="content">
 
-  <!-- Upload Tab -->
-  <div id="uploadTab" class="tab-content">
-    <h2>Upload Files</h2>
-    <form id="uploadForm">
-      <label for="fileCategory">Category:</label>
-      <select id="fileCategory" required>
-        <option value="">-- Select Category --</option>
-        <option value="Linux Notes">Linux Notes</option>
-        <option value="AWS Notes">AWS Notes</option>
-        <option value="Terraform Notes">Terraform Notes</option>
-      </select>
-      <br><br>
-      <input type="file" id="fileInput" required />
-      <button type="submit">Upload</button>
-    </form>
-    <div id="uploadStatus"></div>
-  </div>
+    <!-- Upload -->
+    <section id="upload" class="tab-content active">
+      <h2>Upload Files</h2>
 
-  <!-- View Tab -->
-  <div id="viewTab" class="tab-content">
-    <h2>View Uploaded Files</h2>
-    <label for="viewCategory">Select Category:</label>
-    <select id="viewCategory">
-      <option value="">-- Select Category --</option>
-      <option value="Linux Notes">Linux Notes</option>
-      <option value="AWS Notes">AWS Notes</option>
-      <option value="Terraform Notes">Terraform Notes</option>
-    </select>
-    <div id="fileList"></div>
-  </div>
+      <div class="field-row">
+        <label for="uploadCategory">Choose Category:</label>
+        <select id="uploadCategory">
+          <option value="">-- Select --</option>
+        </select>
 
-  <!-- About Tab -->
-  <div id="aboutTab" class="tab-content">
-    <h2>About</h2>
-    <p>This capstone project allows uploading and viewing categorized notes using AWS S3. No backend required — fully static.</p>
-  </div>
+        <input id="newCategory" type="text" placeholder="Or create new (e.g. Celsius)" />
+      </div>
+
+      <div id="dropZone" class="drop-zone" tabindex="0">
+        Drag a file here, or click to select one
+        <input id="fileInput" type="file" hidden />
+      </div>
+
+      <button id="uploadBtn" class="primary">Upload</button>
+
+      <div id="uploadStatus" class="status" aria-live="polite"></div>
+    </section>
+
+    <!-- View -->
+    <section id="view" class="tab-content">
+      <h2>Available Files</h2>
+
+      <div class="field-row">
+        <label for="viewCategory">Select Category</label>
+        <select id="viewCategory">
+          <option value="">-- Select a category --</option>
+        </select>
+      </div>
+
+      <div id="fileList" class="file-list">Choose a category to see files.</div>
+    </section>
+
+    <!-- About -->
+    <section id="about" class="tab-content">
+      <h2>About This Project</h2>
+      <p>
+        This static site is hosted on Amazon S3. You can upload study notes into
+        <code>uploadedfiles/&lt;category&gt;/</code> and browse them here.
+      </p>
+    </section>
+
+  </main>
+
+  <!-- JS (order matters: script.js first) -->
+  <script defer src="script.js"></script>
+  <script defer src="upload.js"></script>
+  <script defer src="view.js"></script>
 </body>
 </html>
