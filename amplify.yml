@@ -1,7 +1,11 @@
 version: 1
 frontend:
   platform: WEB
+  build:
+    commands: []
   artifacts:
     baseDirectory: /
     files:
       - '**/*'
+  cache:
+    paths: []
