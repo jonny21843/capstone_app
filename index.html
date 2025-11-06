@@ -1,34 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NotesHub</title>
-</head>
-<body>
-  <h1>Welcome to Feagans Capstone Project</h1>
-  <p>This is your AWS Amplify-hosted static site.</p>
-
-  <h2>Upload a Note</h2>
-  <input type="file" id="fileInput" />
-  <button onclick="uploadFile()">Upload</button>
-
-  <script>
-    async function uploadFile() {
-      const file = document.getElementById('fileInput').files[0];
-      if (!file) return alert('Please select a file');
-      const uploadUrl = `https://dev-feagans-capstone.s3.amazonaws.com/${file.name}`;
-      const result = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': file.type },
-        body: file
-      });
-      if (result.ok) {
-        alert('Upload successful!');
-      } else {
-        alert('Upload failed.');
-      }
-    }
-  </script>
-</body>
+<html>
+  <head>
+    <title>NotesHub</title>
+  </head>
+  <body>
+    <h1>Welcome to Feagans Casptone Project</h1>
+    <p>This is the static version deployed via Amplify.</p>
+  </body>
 </html>
