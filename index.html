@@ -1,122 +1,78 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Feagans Capstone Project</title>
-  <link rel="stylesheet" href="styles.css" />
-
-  <!-- Core tab + shared logic -->
-  <script defer src="script.js"></script>
-  <!-- Upload logic -->
-  <script defer src="upload.js"></script>
-  <!-- View/list logic -->
-  <script defer src="view.js"></script>
+    <meta charset="UTF-8">
+    <title>Feagans Capstone Project</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="page">
-    <header class="header">
-      <h1>Welcome to Feagans Capstone Project</h1>
-      <nav class="nav-buttons">
-        <button class="nav-btn" data-tab="uploadTab" onclick="showTab('uploadTab')">
-          ⬆️ Upload
-        </button>
-        <button class="nav-btn" data-tab="viewTab" onclick="showTab('viewTab')">
-          📂 View Files
-        </button>
-        <button class="nav-btn" data-tab="aboutTab" onclick="showTab('aboutTab')">
-          ℹ️ About
-        </button>
-      </nav>
-    </header>
 
-    <!-- Upload tab -->
-    <section id="uploadTab" class="tab-content active">
-      <h2>Upload Files</h2>
+<h1>Welcome to Feagans Capstone Project</h1>
 
-      <div class="card">
-        <div class="field-row">
-          <label for="uploadField">Choose Field:</label>
-          <select id="uploadField">
-            <option value="">-- Select a field --</option>
-            <!-- Populated by script.js from S3 -->
-          </select>
+<div class="tabs">
+    <button class="tab-button" data-tab="upload"><span>📤</span> Upload</button>
+    <button class="tab-button" data-tab="view"><span>📁</span> View Files</button>
+    <button class="tab-button" data-tab="about"><span>📘</span> About</button>
+</div>
+
+<!-- Upload Section -->
+<section id="upload" class="tab-section hidden">
+    <div class="card">
+        <h2>Upload Files</h2>
+
+        <label>Choose Field:</label>
+        <select id="upload-field"></select>
+        <label>Create New Field:</label>
+        <input id="new-field" placeholder="e.g. Medicine">
+
+        <br><br>
+
+        <label>Choose Category:</label>
+        <select id="upload-category"></select>
+        <label>Create New Category:</label>
+        <input id="new-category" placeholder="e.g. Anatomy">
+
+        <!-- DRAG & DROP AREA -->
+        <div id="drop-zone" class="drop-zone">
+            Drag & drop a file here or click to select
         </div>
 
-        <div class="field-row">
-          <label for="uploadCategory">Choose Category:</label>
-          <select id="uploadCategory">
-            <option value="">-- Select category --</option>
-            <!-- Populated dynamically based on field -->
-          </select>
-        </div>
+        <!-- Hidden file input -->
+        <input type="file" id="file-input" hidden>
 
-        <div class="field-row">
-          <label for="newCategoryInput">Or create new category:</label>
-          <input
-            type="text"
-            id="newCategoryInput"
-            placeholder="e.g. Offensive Security Notes"
-          />
-        </div>
+        <button id="upload-btn" class="primary-btn">Upload</button>
+        <div id="upload-status"></div>
+    </div>
+</section>
 
-        <div id="dropZone" class="drop-zone">
-          <p>Drag and drop a file here, or click to select one.</p>
-          <input type="file" id="fileInput" class="hidden-input" />
-        </div>
+<!-- View Section -->
+<section id="view" class="tab-section hidden">
+    <div class="card">
+        <h2>Available Files</h2>
 
-        <div class="actions-row">
-          <button id="uploadButton" class="primary-btn">
-            ⬆️ Upload
-          </button>
-          <span id="uploadStatus" class="status-text"></span>
-        </div>
-      </div>
-    </section>
+        <input id="search-box" class="search-box" placeholder="Search files...">
 
-    <!-- View tab -->
-    <section id="viewTab" class="tab-content">
-      <h2>Available Files</h2>
+        <label>Select Field:</label>
+        <select id="view-field"></select>
 
-      <div class="card">
-        <div class="field-row">
-          <label for="viewField">Select Field:</label>
-          <select id="viewField">
-            <option value="">-- Select a field --</option>
-            <!-- Populated by script.js -->
-          </select>
-        </div>
+        <label>Select Category:</label>
+        <select id="view-category"></select>
 
-        <div class="field-row">
-          <label for="viewCategory">Select Category:</label>
-          <select id="viewCategory">
-            <option value="">-- Select a category --</option>
-            <!-- Populated when field changes -->
-          </select>
-        </div>
+        <ul id="file-list"></ul>
+    </div>
+</section>
 
-        <div id="fileList" class="file-list">
-          <p>Choose a field and category to see files.</p>
-        </div>
-      </div>
-    </section>
+<section id="about" class="tab-section hidden">
+    <div class="card">
+        <h2>About This Project</h2>
+        <p>This static site is hosted on Amazon S3. Users can upload categorized study notes into organized S3 folders.</p>
+    </div>
+</section>
 
-    <!-- About tab -->
-    <section id="aboutTab" class="tab-content">
-      <h2>About This Project</h2>
-      <div class="card">
-        <p>
-          This static site is hosted on Amazon S3. You can upload categorized
-          study notes into <code>uploadedfiles/&lt;field&gt;/&lt;category&gt;/</code>
-          and browse them here.
-        </p>
-        <p>
-          Fields represent domains like <strong>IT</strong>, <strong>Medical</strong>,
-          <strong>Business</strong>, and so on. Inside each field, categories like
-          <strong>Linux Notes</strong> or <strong>Anatomy Notes</strong> keep content
-          organized.
-        </p>
-      </div>
-    </section>
-  </div>
+<script src="tabs.js"></script>
+<script src="config.js"></script>
+<script src="upload.js"></script>
+<script src="view.js"></script>
+
 </body>
 </html>

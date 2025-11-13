@@ -1,27 +1,18 @@
-// Simple, resilient tab switcher
 document.addEventListener("DOMContentLoaded", () => {
-  const buttons  = document.querySelectorAll(".tab-btn");
-  const sections = document.querySelectorAll(".tab-content");
+    const buttons = document.querySelectorAll(".tab-button");
+    const sections = document.querySelectorAll(".tab-section");
 
-  function show(id){
-    sections.forEach(s => s.classList.toggle("active", s.id === id));
-    buttons.forEach(b => b.classList.toggle("active", b.dataset.target === id));
-  }
+    buttons.forEach(btn => {
+        btn.addEventListener("click", () => {
+            buttons.forEach(b => b.classList.remove("active"));
+            sections.forEach(s => s.classList.add("hidden"));
 
-  // Wire up clicks
-  buttons.forEach(btn => {
-    btn.addEventListener("click", () => {
-      const id = btn.dataset.target;
-      show(id);
+            btn.classList.add("active");
 
-      // refresh categories when entering Upload or View
-      if (["upload-section","view-section"].includes(id) && window.loadCategories){
-        window.loadCategories();
-      }
+            const tab = btn.getAttribute("data-tab");
+            document.getElementById(tab).classList.remove("hidden");
+        });
     });
-  });
 
-  // First paint: ensure only one is visible
-  show("upload-section");
-  if (window.loadCategories) window.loadCategories();
+    document.querySelector(".tab-button[data-tab='upload']").click();
 });
