@@ -1,130 +1,263 @@
-console.log("UPLOAD.JS ACTIVE");
+console.log("UPLOAD_JS ACTIVE");
 
 document.addEventListener("DOMContentLoaded", () => {
+    // Make sure BUCKET_URL is available from config.js
+    if (typeof BUCKET_URL === "undefined") {
+        console.error("BUCKET_URL is not defined. Check config.js and script order in index.html.");
+        return;
+    }
 
-    // DOM elements
-    const fieldSelect = document.getElementById("upload-field");
-    const newFieldInput = document.getElementById("new-field");
-    const categorySelect = document.getElementById("upload-category");
-    const newCategoryInput = document.getElementById("new-category");
+    // Try both the old and new ID patterns so we don't break your HTML
+    const fieldSelect =
+        document.getElementById("upload-field") ||
+        document.getElementById("uploadField");
 
-    const dropZone = document.getElementById("drop-zone");
-    const fileInput = document.getElementById("file-input");
-    const uploadBtn = document.getElementById("upload-btn");
-    const statusBox = document.getElementById("upload-status");
+    const newFieldInput =
+        document.getElementById("upload-new-field") ||
+        document.getElementById("new-field") ||
+        document.getElementById("newField");
 
-    // Load fields on start
-    loadFields();
+    const categorySelect =
+        document.getElementById("upload-category") ||
+        document.getElementById("uploadCategory");
 
-    // -------- LOAD FIELDS ----------
+    const newCategoryInput =
+        document.getElementById("upload-new-category") ||
+        document.getElementById("new-category") ||
+        document.getElementById("newCategory");
+
+    const dropZone =
+        document.getElementById("upload-dropzone") ||
+        document.getElementById("drop-zone") ||
+        document.getElementById("dropZone");
+
+    const uploadBtn =
+        document.getElementById("upload-btn") ||
+        document.getElementById("uploadBtn");
+
+    const fileInput =
+        document.getElementById("hidden-file-input") ||
+        document.getElementById("file-input") ||
+        document.getElementById("fileInput");
+
+    const statusBox =
+        document.getElementById("upload-status") ||
+        document.getElementById("uploadStatus");
+
+    // If we can't even find the selects, bail early
+    if (!fieldSelect || !categorySelect) {
+        console.error("Upload fields not found in DOM. Check IDs in index.html.");
+        return;
+    }
+
+    // -------------------------------
+    // Allowed file types & size limit
+    // -------------------------------
+    const allowedTypes = [
+        "application/pdf", // PDFs
+        "image/jpeg",      // JPG/JPEG
+        "image/png",       // PNG
+        "application/msword", // .doc
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" // .docx
+    ];
+
+    const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB (tweak if you want)
+
+    function validateFile(file) {
+        if (!file) return false;
+
+        if (!allowedTypes.includes(file.type)) {
+            alert("Only PDF, Word documents, JPG, and PNG files are allowed.");
+            return false;
+        }
+
+        if (file.size > MAX_FILE_SIZE) {
+            alert("File is too large. Max allowed size is 25 MB.");
+            return false;
+        }
+
+        return true;
+    }
+
+    let selectedFile = null;
+
+    // -------------------------------
+    // Load fields from S3
+    // -------------------------------
     async function loadFields() {
-        const res = await fetch(`${BUCKET_URL}?list-type=2&delimiter=/&prefix=uploadedfiles/`);
-        const xml = new DOMParser().parseFromString(await res.text(), "application/xml");
-
-        const prefixes = [...xml.getElementsByTagName("Prefix")];
-        fieldSelect.innerHTML = "";
-
-        prefixes.forEach(p => {
-            let field = p.textContent.replace("uploadedfiles/", "").replace("/", "");
-            if (!field) return;
-
-            const opt = document.createElement("option");
-            opt.value = field;
-            opt.textContent = field;
-            fieldSelect.appendChild(opt);
-        });
-
-        loadCategories();
-    }
-
-    // -------- LOAD CATEGORIES ----------
-    async function loadCategories() {
-        const field = fieldSelect.value;
-        if (!field) return;
-
-        const res = await fetch(`${BUCKET_URL}?list-type=2&delimiter=/&prefix=uploadedfiles/${field}/`);
-        const xml = new DOMParser().parseFromString(await res.text(), "application/xml");
-
-        const prefixes = [...xml.getElementsByTagName("Prefix")];
-        categorySelect.innerHTML = "";
-
-        prefixes.forEach(p => {
-            let category = p.textContent.replace(`uploadedfiles/${field}/`, "").replace("/", "");
-            if (!category) return;
-
-            const opt = document.createElement("option");
-            opt.value = category;
-            opt.textContent = category;
-            categorySelect.appendChild(opt);
-        });
-    }
-
-    // Refresh categories when field changes
-    fieldSelect.addEventListener("change", loadCategories);
-
-    // -------- DRAG & DROP ----------
-    dropZone.addEventListener("click", () => fileInput.click());
-
-    dropZone.addEventListener("dragover", e => {
-        e.preventDefault();
-        dropZone.classList.add("drag-active");
-    });
-
-    dropZone.addEventListener("dragleave", () => {
-        dropZone.classList.remove("drag-active");
-    });
-
-    dropZone.addEventListener("drop", e => {
-        e.preventDefault();
-        dropZone.classList.remove("drag-active");
-        fileInput.files = e.dataTransfer.files;
-        statusBox.textContent = `${fileInput.files[0].name} ready to upload`;
-    });
-
-    fileInput.addEventListener("change", () => {
-        if (fileInput.files.length)
-            statusBox.textContent = `${fileInput.files[0].name} ready to upload`;
-    });
-
-    // -------- PERFORM UPLOAD ----------
-    uploadBtn.addEventListener("click", async () => {
-
-        if (!fileInput.files.length) {
-            statusBox.textContent = "❌ Please choose a file first";
-            return;
-        }
-
-        let field = newFieldInput.value || fieldSelect.value;
-        let category = newCategoryInput.value || categorySelect.value;
-
-        if (!field || !category) {
-            statusBox.textContent = "❌ Field and Category are required";
-            return;
-        }
-
-        const file = fileInput.files[0];
-        const s3Key = `uploadedfiles/${field}/${category}/${file.name}`;
-
-        statusBox.textContent = "Uploading...";
-
         try {
-            const uploadRes = await fetch(`${BUCKET_URL}/${s3Key}`, {
-                method: "PUT",
-                body: file,
-                headers: { "Content-Type": file.type }
+            const url = `${BUCKET_URL}/?list-type=2&delimiter=/&prefix=uploadedfiles/`;
+            const resp = await fetch(url);
+            const xmlText = await resp.text();
+            const xml = new DOMParser().parseFromString(xmlText, "application/xml");
+
+            fieldSelect.innerHTML = "";
+
+            const prefixes = [...xml.getElementsByTagName("Prefix")];
+            prefixes.forEach(p => {
+                const field = p.textContent.replace("uploadedfiles/", "").replace("/", "");
+                if (field) {
+                    const opt = document.createElement("option");
+                    opt.value = field;
+                    opt.textContent = field;
+                    fieldSelect.appendChild(opt);
+                }
             });
 
-            if (uploadRes.ok) {
-                statusBox.textContent = "✅ Upload complete!";
-                fileInput.value = "";
-            } else {
-                statusBox.textContent = "❌ Upload failed";
-            }
-
+            // Once fields are loaded, load categories for the first one
+            await loadCategories();
         } catch (err) {
-            console.error(err);
-            statusBox.textContent = "❌ Upload error";
+            console.error("Error loading fields:", err);
         }
-    });
+    }
 
+    // -------------------------------
+    // Load categories for selected field
+    // -------------------------------
+    async function loadCategories() {
+        try {
+            const field = fieldSelect.value;
+            if (!field) return;
+
+            const url = `${BUCKET_URL}/?list-type=2&delimiter=/&prefix=uploadedfiles/${encodeURIComponent(field)}/`;
+            const resp = await fetch(url);
+            const xmlText = await resp.text();
+            const xml = new DOMParser().parseFromString(xmlText, "application/xml");
+
+            categorySelect.innerHTML = "";
+
+            const prefixes = [...xml.getElementsByTagName("Prefix")];
+            prefixes.forEach(p => {
+                const cat = p.textContent
+                    .replace(`uploadedfiles/${field}/`, "")
+                    .replace("/", "");
+                if (cat) {
+                    const opt = document.createElement("option");
+                    opt.value = cat;
+                    opt.textContent = cat;
+                    categorySelect.appendChild(opt);
+                }
+            });
+        } catch (err) {
+            console.error("Error loading categories:", err);
+        }
+    }
+
+    fieldSelect.addEventListener("change", loadCategories);
+
+    // -------------------------------
+    // Drag & drop handling
+    // -------------------------------
+    if (dropZone) {
+        dropZone.addEventListener("dragover", e => {
+            e.preventDefault();
+            dropZone.classList.add("dragover");
+        });
+
+        dropZone.addEventListener("dragleave", () => {
+            dropZone.classList.remove("dragover");
+        });
+
+        dropZone.addEventListener("drop", e => {
+            e.preventDefault();
+            dropZone.classList.remove("dragover");
+
+            const file = e.dataTransfer.files[0];
+            if (!validateFile(file)) return;
+
+            selectedFile = file;
+            dropZone.textContent = `Selected: ${file.name}`;
+        });
+
+        // Click to open file picker
+        dropZone.addEventListener("click", () => {
+            if (fileInput) fileInput.click();
+        });
+    }
+
+    // -------------------------------
+    // File picker change
+    // -------------------------------
+    if (fileInput) {
+        fileInput.addEventListener("change", () => {
+            const file = fileInput.files[0];
+            if (!validateFile(file)) {
+                fileInput.value = "";
+                return;
+            }
+            selectedFile = file;
+            if (dropZone) {
+                dropZone.textContent = `Selected: ${file.name}`;
+            }
+        });
+    }
+
+    // -------------------------------
+    // Upload button click
+    // -------------------------------
+    if (uploadBtn) {
+        uploadBtn.addEventListener("click", async () => {
+            try {
+                if (!selectedFile) {
+                    alert("Please select a file first (drag & drop or click the box).");
+                    return;
+                }
+
+                if (statusBox) statusBox.textContent = "Uploading...";
+
+                // Use new field/category if provided, otherwise the selected ones
+                const field =
+                    (newFieldInput && newFieldInput.value.trim()) ||
+                    fieldSelect.value ||
+                    "General";
+
+                const category =
+                    (newCategoryInput && newCategoryInput.value.trim()) ||
+                    categorySelect.value ||
+                    "Unsorted";
+
+                const safeField = encodeURIComponent(field);
+                const safeCat = encodeURIComponent(category);
+                const safeName = encodeURIComponent(selectedFile.name);
+
+                const key = `uploadedfiles/${safeField}/${safeCat}/${safeName}`;
+                const uploadURL = `${BUCKET_URL}/${key}`;
+
+                const resp = await fetch(uploadURL, {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": selectedFile.type || "application/octet-stream"
+                    },
+                    body: selectedFile
+                });
+
+                if (resp.ok) {
+                    if (statusBox) statusBox.textContent = "Upload complete!";
+
+                    // Reset UI a bit
+                    selectedFile = null;
+                    if (dropZone) {
+                        dropZone.textContent = "Drag & drop a file here or click to select";
+                    }
+                    if (fileInput) {
+                        fileInput.value = "";
+                    }
+                    if (newFieldInput) newFieldInput.value = "";
+                    if (newCategoryInput) newCategoryInput.value = "";
+
+                    // Reload fields/categories to include any new ones
+                    await loadFields();
+                } else {
+                    console.error("Upload failed:", resp.status, resp.statusText);
+                    if (statusBox) statusBox.textContent = "Upload failed. See console for details.";
+                }
+            } catch (err) {
+                console.error("Error during upload:", err);
+                if (statusBox) statusBox.textContent = "Upload failed. See console for details.";
+            }
+        });
+    }
+
+    // Kick everything off
+    loadFields();
 });
