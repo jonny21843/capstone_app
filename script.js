@@ -1,83 +1,158 @@
-// ---------- Shared config ----------
-window.APP = {
-  // Website URL for READs (public object URLs)
-  websiteBase: "https://dev-feagans-capstone.s3-website-us-east-1.amazonaws.com",
-  // REST/Listing endpoint for LIST + building object links
-  bucketRest: "https://dev-feagans-capstone.s3.amazonaws.com",
-  prefixRoot: "uploadedfiles/",
-};
+// script.js
 
-// Turn display name into a folder-safe slug
-window.slugify = (name) =>
-  name.trim()
-      .replace(/[\/\\]+/g, "-")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-");
+// --- S3 config ---
+const BUCKET_URL = "https://dev-feagans-capstone.s3.amazonaws.com";
+const BASE_PREFIX = "uploadedfiles/";
 
-// ---------- Tabs ----------
-document.addEventListener("DOMContentLoaded", () => {
-  const sections = document.querySelectorAll(".tab-content");
-  const buttons  = document.querySelectorAll(".nav-btn");
+// Utility: build a URL-safe prefix string (keeps /, encodes spaces etc.)
+function buildPrefix(path) {
+  // path like "uploadedfiles/IT/" or "uploadedfiles/IT/Linux Notes/"
+  return encodeURIComponent(path).replace(/%2F/g, "/");
+}
 
-  function showTab(id) {
-    sections.forEach(s => s.classList.remove("active"));
-    document.getElementById(id).classList.add("active");
+// --- Tab switching ---
+function showTab(tabId) {
+  const tabs = document.querySelectorAll(".tab-content");
+  tabs.forEach((tab) => tab.classList.remove("active"));
+
+  const target = document.getElementById(tabId);
+  if (target) target.classList.add("active");
+
+  const navButtons = document.querySelectorAll(".nav-btn");
+  navButtons.forEach((btn) => btn.classList.remove("active-tab"));
+  const activeBtn = document.querySelector(`.nav-btn[data-tab="${tabId}"]`);
+  if (activeBtn) activeBtn.classList.add("active-tab");
+}
+
+// Make showTab available globally
+window.showTab = showTab;
+
+// --- S3 listing helpers ---
+async function listFieldsFromS3() {
+  const prefix = buildPrefix(BASE_PREFIX);
+  const url = `${BUCKET_URL}?list-type=2&prefix=${prefix}&delimiter=/`;
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    console.error("Error listing fields:", res.status, await res.text());
+    throw new Error("Failed to list fields");
   }
 
-  buttons.forEach(btn => {
-    btn.addEventListener("click", () => showTab(btn.dataset.tab));
+  const text = await res.text();
+  const xml = new DOMParser().parseFromString(text, "application/xml");
+
+  const prefixes = Array.from(xml.getElementsByTagName("CommonPrefixes"));
+  const fields = prefixes
+    .map((cp) => cp.getElementsByTagName("Prefix")[0]?.textContent || "")
+    .map((p) => p.replace(BASE_PREFIX, "").replace(/\/$/, ""))
+    .filter((name) => name); // remove empty
+
+  return fields;
+}
+
+async function listCategoriesForField(fieldName) {
+  if (!fieldName) return [];
+
+  const prefixPath = `${BASE_PREFIX}${fieldName}/`;
+  const prefix = buildPrefix(prefixPath);
+  const url = `${BUCKET_URL}?list-type=2&prefix=${prefix}&delimiter=/`;
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    console.error("Error listing categories:", res.status, await res.text());
+    throw new Error("Failed to list categories");
+  }
+
+  const text = await res.text();
+  const xml = new DOMParser().parseFromString(text, "application/xml");
+
+  const prefixes = Array.from(xml.getElementsByTagName("CommonPrefixes"));
+  const categories = prefixes
+    .map((cp) => cp.getElementsByTagName("Prefix")[0]?.textContent || "")
+    .map((p) =>
+      p
+        .replace(`${BASE_PREFIX}${fieldName}/`, "")
+        .replace(/\/$/, "")
+    )
+    .filter((name) => name);
+
+  return categories;
+}
+
+// Populate <select> options helper
+function fillSelect(selectEl, items, placeholderText) {
+  if (!selectEl) return;
+  selectEl.innerHTML = "";
+
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = placeholderText;
+  selectEl.appendChild(placeholder);
+
+  items.forEach((item) => {
+    const opt = document.createElement("option");
+    opt.value = item;
+    opt.textContent = item;
+    selectEl.appendChild(opt);
+  });
+}
+
+// --- Initial load ---
+document.addEventListener("DOMContentLoaded", async () => {
+  const uploadFieldSelect = document.getElementById("uploadField");
+  const viewFieldSelect = document.getElementById("viewField");
+
+  try {
+    const fields = await listFieldsFromS3();
+
+    fillSelect(uploadFieldSelect, fields, "-- Select a field --");
+    fillSelect(viewFieldSelect, fields, "-- Select a field --");
+  } catch (err) {
+    console.error(err);
+  }
+
+  // When field changes on UPLOAD tab, load categories
+  uploadFieldSelect?.addEventListener("change", async () => {
+    const field = uploadFieldSelect.value;
+    const categorySelect = document.getElementById("uploadCategory");
+    if (!field) {
+      fillSelect(categorySelect, [], "-- Select category --");
+      return;
+    }
+    try {
+      const cats = await listCategoriesForField(field);
+      fillSelect(categorySelect, cats, "-- Select category --");
+    } catch (e) {
+      console.error(e);
+    }
   });
 
-  // default tab
-  showTab("upload");
+  // When field changes on VIEW tab, load categories
+  viewFieldSelect?.addEventListener("change", async () => {
+    const field = viewFieldSelect.value;
+    const categorySelect = document.getElementById("viewCategory");
+    const fileList = document.getElementById("fileList");
+    if (fileList) fileList.innerHTML = "<p>Choose a category to see files.</p>";
 
-  // Populate categories on both dropdowns at load
-  hydrateCategories();
+    if (!field) {
+      fillSelect(categorySelect, [], "-- Select a category --");
+      return;
+    }
+    try {
+      const cats = await listCategoriesForField(field);
+      fillSelect(categorySelect, cats, "-- Select a category --");
+    } catch (e) {
+      console.error(e);
+    }
+  });
+
+  // Default tab
+  showTab("uploadTab");
 });
 
-// Query S3 for first-level folders under uploadedfiles/
-async function listCategories() {
-  const { bucketRest, prefixRoot } = window.APP;
-  const url = `${bucketRest}?list-type=2&prefix=${encodeURIComponent(prefixRoot)}&delimiter=%2F`;
-
-  const res  = await fetch(url);
-  const text = await res.text();
-  const xml  = new DOMParser().parseFromString(text, "application/xml");
-
-  const prefixes = Array.from(xml.getElementsByTagName("CommonPrefixes"))
-    .map(cp => cp.getElementsByTagName("Prefix")[0]?.textContent || "")
-    .filter(p => p.startsWith(prefixRoot) && p.endsWith("/"))
-    .map(p => p.slice(prefixRoot.length, -1)) // strip 'uploadedfiles/' and trailing '/'
-    .filter(Boolean);
-
-  // sort by display name
-  return prefixes.sort((a, b) => a.localeCompare(b));
-}
-
-async function hydrateCategories() {
-  try {
-    const cats = await listCategories();
-
-    const uploadSel = document.getElementById("uploadCategory");
-    const viewSel   = document.getElementById("viewCategory");
-
-    const setOptions = (select) => {
-      // clear
-      select.innerHTML = "";
-      select.appendChild(new Option("-- Select --", ""));
-      cats.forEach(c => select.appendChild(new Option(c, c)));
-    };
-
-    if (uploadSel) setOptions(uploadSel);
-    if (viewSel)   setOptions(viewSel);
-
-    // Fire initial view render (if on View tab, user will already have the dropdown)
-    const evt = new Event("change");
-    if (viewSel) viewSel.dispatchEvent(evt);
-  } catch (e) {
-    console.error("Category load failed:", e);
-  }
-}
-
-// Expose so upload.js can re-hydrate after creating a new category
-window.refreshCategories = hydrateCategories;
+// Expose S3 helpers to other scripts
+window.__S3_CONFIG__ = {
+  BUCKET_URL,
+  BASE_PREFIX,
+  buildPrefix,
+};

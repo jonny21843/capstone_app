@@ -3,72 +3,120 @@
 <head>
   <meta charset="UTF-8" />
   <title>Feagans Capstone Project</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="styles.css" />
+
+  <!-- Core tab + shared logic -->
+  <script defer src="script.js"></script>
+  <!-- Upload logic -->
+  <script defer src="upload.js"></script>
+  <!-- View/list logic -->
+  <script defer src="view.js"></script>
 </head>
 <body>
-  <header class="site-header">
-    <h1>Welcome to Feagans Capstone Project</h1>
-    <nav class="top-nav">
-      <button class="nav-btn" data-tab="upload">📤 Upload</button>
-      <button class="nav-btn" data-tab="view">📂 View Files</button>
-      <button class="nav-btn" data-tab="about">ℹ️ About</button>
-    </nav>
-  </header>
+  <div class="page">
+    <header class="header">
+      <h1>Welcome to Feagans Capstone Project</h1>
+      <nav class="nav-buttons">
+        <button class="nav-btn" data-tab="uploadTab" onclick="showTab('uploadTab')">
+          ⬆️ Upload
+        </button>
+        <button class="nav-btn" data-tab="viewTab" onclick="showTab('viewTab')">
+          📂 View Files
+        </button>
+        <button class="nav-btn" data-tab="aboutTab" onclick="showTab('aboutTab')">
+          ℹ️ About
+        </button>
+      </nav>
+    </header>
 
-  <main class="content">
-
-    <!-- Upload -->
-    <section id="upload" class="tab-content active">
+    <!-- Upload tab -->
+    <section id="uploadTab" class="tab-content active">
       <h2>Upload Files</h2>
 
-      <div class="field-row">
-        <label for="uploadCategory">Choose Category:</label>
-        <select id="uploadCategory">
-          <option value="">-- Select --</option>
-        </select>
+      <div class="card">
+        <div class="field-row">
+          <label for="uploadField">Choose Field:</label>
+          <select id="uploadField">
+            <option value="">-- Select a field --</option>
+            <!-- Populated by script.js from S3 -->
+          </select>
+        </div>
 
-        <input id="newCategory" type="text" placeholder="Or create new (e.g. Celsius)" />
+        <div class="field-row">
+          <label for="uploadCategory">Choose Category:</label>
+          <select id="uploadCategory">
+            <option value="">-- Select category --</option>
+            <!-- Populated dynamically based on field -->
+          </select>
+        </div>
+
+        <div class="field-row">
+          <label for="newCategoryInput">Or create new category:</label>
+          <input
+            type="text"
+            id="newCategoryInput"
+            placeholder="e.g. Offensive Security Notes"
+          />
+        </div>
+
+        <div id="dropZone" class="drop-zone">
+          <p>Drag and drop a file here, or click to select one.</p>
+          <input type="file" id="fileInput" class="hidden-input" />
+        </div>
+
+        <div class="actions-row">
+          <button id="uploadButton" class="primary-btn">
+            ⬆️ Upload
+          </button>
+          <span id="uploadStatus" class="status-text"></span>
+        </div>
       </div>
-
-      <div id="dropZone" class="drop-zone" tabindex="0">
-        Drag a file here, or click to select one
-        <input id="fileInput" type="file" hidden />
-      </div>
-
-      <button id="uploadBtn" class="primary">Upload</button>
-
-      <div id="uploadStatus" class="status" aria-live="polite"></div>
     </section>
 
-    <!-- View -->
-    <section id="view" class="tab-content">
+    <!-- View tab -->
+    <section id="viewTab" class="tab-content">
       <h2>Available Files</h2>
 
-      <div class="field-row">
-        <label for="viewCategory">Select Category</label>
-        <select id="viewCategory">
-          <option value="">-- Select a category --</option>
-        </select>
+      <div class="card">
+        <div class="field-row">
+          <label for="viewField">Select Field:</label>
+          <select id="viewField">
+            <option value="">-- Select a field --</option>
+            <!-- Populated by script.js -->
+          </select>
+        </div>
+
+        <div class="field-row">
+          <label for="viewCategory">Select Category:</label>
+          <select id="viewCategory">
+            <option value="">-- Select a category --</option>
+            <!-- Populated when field changes -->
+          </select>
+        </div>
+
+        <div id="fileList" class="file-list">
+          <p>Choose a field and category to see files.</p>
+        </div>
       </div>
-
-      <div id="fileList" class="file-list">Choose a category to see files.</div>
     </section>
 
-    <!-- About -->
-    <section id="about" class="tab-content">
+    <!-- About tab -->
+    <section id="aboutTab" class="tab-content">
       <h2>About This Project</h2>
-      <p>
-        This static site is hosted on Amazon S3. You can upload study notes into
-        <code>uploadedfiles/&lt;category&gt;/</code> and browse them here.
-      </p>
+      <div class="card">
+        <p>
+          This static site is hosted on Amazon S3. You can upload categorized
+          study notes into <code>uploadedfiles/&lt;field&gt;/&lt;category&gt;/</code>
+          and browse them here.
+        </p>
+        <p>
+          Fields represent domains like <strong>IT</strong>, <strong>Medical</strong>,
+          <strong>Business</strong>, and so on. Inside each field, categories like
+          <strong>Linux Notes</strong> or <strong>Anatomy Notes</strong> keep content
+          organized.
+        </p>
+      </div>
     </section>
-
-  </main>
-
-  <!-- JS (order matters: script.js first) -->
-  <script defer src="script.js"></script>
-  <script defer src="upload.js"></script>
-  <script defer src="view.js"></script>
+  </div>
 </body>
 </html>

@@ -1,100 +1,84 @@
-document.addEventListener("DOMContentLoaded", () => {
-  // Find whichever select you have on the View tab
-  const categorySelect =
-    document.querySelector("#viewCategory") ||
-    document.querySelector("#fileCategory") ||
-    document.querySelector("#listCategory");
+// view.js
 
+document.addEventListener("DOMContentLoaded", () => {
+  const { BUCKET_URL, BASE_PREFIX, buildPrefix } = window.__S3_CONFIG__ || {};
+
+  const fieldSelect = document.getElementById("viewField");
+  const categorySelect = document.getElementById("viewCategory");
   const fileListContainer = document.getElementById("fileList");
 
-  // Bail if the elements aren't present on this page
-  if (!categorySelect || !fileListContainer) return;
+  if (!fieldSelect || !categorySelect || !fileListContainer) return;
 
-  const BUCKET = "dev-feagans-capstone";
-  const REST_BASE = `https://${BUCKET}.s3.amazonaws.com`;
-
-  // Same slug rules as used on upload (spaces -> "-", collapse multiple dashes, remove slashes)
-  function slugify(name) {
-    return String(name || "")
-      .trim()
-      .replace(/[\/\\]+/g, "-")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-");
-  }
-
-  // Encode each path segment, but keep slashes
-  function encodeKey(key) {
-    return key.split("/").map(encodeURIComponent).join("/");
-  }
-
-  // Build a prefix query param that keeps slashes as slashes
-  function buildPrefixParam(pathWithSlashes) {
-    // encodeURIComponent, then restore %2F back to /
-    return encodeURIComponent(pathWithSlashes).replace(/%2F/g, "/");
-  }
-
-  async function listKeysForPrefix(prefix) {
-    // Use list-type=2 and a prefix; do NOT set delimiter here since we want object keys under that folder
-    const url = `${REST_BASE}?list-type=2&prefix=${buildPrefixParam(prefix)}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`S3 list failed: ${res.status}`);
-    const xml = new DOMParser().parseFromString(await res.text(), "application/xml");
-    const contents = Array.from(xml.getElementsByTagName("Contents"));
-    const keys = contents
-      .map(c => c.getElementsByTagName("Key")[0]?.textContent || "")
-      .filter(k => k && k !== prefix); // exclude the "folder marker"
-    return keys;
-  }
-
-  async function listFiles(category) {
-    if (!category || category === "-- Select --" || category === "-- Select a category --") {
-      fileListContainer.innerHTML = "<p>Please select a category.</p>";
+  async function listFiles(field, category) {
+    if (!field || !category) {
+      fileListContainer.innerHTML = "<p>Choose a field and category to see files.</p>";
       return;
     }
 
-    fileListContainer.innerHTML = "<p>Loading files…</p>";
+    fileListContainer.innerHTML = "<p>Loading files...</p>";
 
-    const rawPrefix  = `uploadedfiles/${category}/`;
-    const slugPrefix = `uploadedfiles/${slugify(category)}/`;
+    const prefixPath = `${BASE_PREFIX}${field}/${category}/`;
+    const prefix = buildPrefix(prefixPath);
+    const url = `${BUCKET_URL}?list-type=2&prefix=${prefix}`;
 
     try {
-      // Try raw category first
-      let keys = await listKeysForPrefix(rawPrefix);
-
-      // If no files found under raw, try slugged folder (covers uploads that used slugify)
-      if (keys.length === 0 && slugPrefix !== rawPrefix) {
-        keys = await listKeysForPrefix(slugPrefix);
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.error("Error listing files:", res.status, await res.text());
+        fileListContainer.innerHTML = "<p>Error loading files.</p>";
+        return;
       }
+
+      const text = await res.text();
+      const xml = new DOMParser().parseFromString(text, "application/xml");
+      const keyEls = Array.from(xml.getElementsByTagName("Key"));
+
+      const keys = keyEls
+        .map((el) => el.textContent || "")
+        .filter((k) => k && !k.endsWith("/")); // ignore folder placeholders
 
       if (keys.length === 0) {
         fileListContainer.innerHTML = "<p>No files found in this category.</p>";
         return;
       }
 
-      // Determine which prefix matched so we can trim it for display
-      const effectivePrefix = keys[0].startsWith(rawPrefix) ? rawPrefix : slugPrefix;
-
       const ul = document.createElement("ul");
-      keys.forEach(key => {
+
+      keys.forEach((key) => {
         const li = document.createElement("li");
-        const a  = document.createElement("a");
-        a.href = `${REST_BASE}/${encodeKey(key)}`; // open via HTTPS REST endpoint
-        a.textContent = key.replace(effectivePrefix, "");
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        li.appendChild(a);
+        const link = document.createElement("a");
+
+        // Display only the filename
+        const filename = key.split("/").pop();
+
+        // Build URL: BUCKET_URL/<encoded-key>
+        const encodedKey = encodeURIComponent(key).replace(/%2F/g, "/");
+        link.href = `${BUCKET_URL}/${encodedKey}`;
+        link.textContent = filename;
+        link.target = "_blank";
+        link.rel = "noopener";
+
+        li.appendChild(link);
         ul.appendChild(li);
       });
 
       fileListContainer.innerHTML = "";
       fileListContainer.appendChild(ul);
     } catch (err) {
-      console.error("Error loading S3 list:", err);
-      fileListContainer.innerHTML = "<p>Error loading files from S3.</p>";
+      console.error("Error fetching file list:", err);
+      fileListContainer.innerHTML = "<p>Error loading files.</p>";
     }
   }
 
-  // Wire up change + initial render if already selected
-  categorySelect.addEventListener("change", () => listFiles(categorySelect.value));
-  if (categorySelect.value) listFiles(categorySelect.value);
+  // When category changes, list files
+  categorySelect.addEventListener("change", () => {
+    const field = fieldSelect.value;
+    const category = categorySelect.value;
+    listFiles(field, category);
+  });
+
+  // If both are already selected (e.g., after reload), show files
+  if (fieldSelect.value && categorySelect.value) {
+    listFiles(fieldSelect.value, categorySelect.value);
+  }
 });
