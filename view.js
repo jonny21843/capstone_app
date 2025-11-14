@@ -1,106 +1,187 @@
 console.log("VIEW.JS LOADED");
 
-document.addEventListener("DOMContentLoaded", () => {
+// -----------------------
+// Load Fields from S3
+// -----------------------
+async function listFields() {
+    const url = `${window.BUCKET_URL}/?list-type=2&delimiter=/&prefix=uploadedfiles/`;
 
-    const fieldSelect = document.getElementById("view-field");
-    const categorySelect = document.getElementById("view-category");
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Cannot list fields");
+
+    const text = await response.text();
+    const xml = new window.DOMParser().parseFromString(text, "text/xml");
+
+    const prefixes = [...xml.getElementsByTagName("CommonPrefixes")];
+    return prefixes.map(p =>
+        p.getElementsByTagName("Prefix")[0].textContent.replace("uploadedfiles/", "").replace("/", "")
+    );
+}
+
+// -----------------------
+// Load Categories for a Field
+// -----------------------
+async function listCategories(field) {
+    const prefix = `uploadedfiles/${field}/`;
+    const url = `${window.BUCKET_URL}/?list-type=2&delimiter=/&prefix=${prefix}`;
+
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Cannot list categories");
+
+    const text = await response.text();
+    const xml = new window.DOMParser().parseFromString(text, "text/xml");
+
+    const prefixes = [...xml.getElementsByTagName("CommonPrefixes")];
+    return prefixes.map(p =>
+        p.getElementsByTagName("Prefix")[0].textContent.replace(prefix, "").replace("/", "")
+    );
+}
+
+// -----------------------
+// Load Files Within Category
+// -----------------------
+async function listFiles(field, category) {
+    const prefix = `uploadedfiles/${field}/${category}/`;
+    const url = `${window.BUCKET_URL}/?list-type=2&prefix=${prefix}`;
+
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Cannot list files");
+
+    const text = await response.text();
+    const xml = new window.DOMParser().parseFromString(text, "text/xml");
+
+    const contents = [...xml.getElementsByTagName("Contents")];
+
+    return contents
+        .filter(c => !c.getElementsByTagName("Key")[0].textContent.endsWith("/"))
+        .map(c => c.getElementsByTagName("Key")[0].textContent.replace(prefix, ""));
+}
+
+// -----------------------
+// Update Breadcrumb
+// -----------------------
+function updateBreadcrumb(field, category) {
+    const breadcrumb = document.getElementById("breadcrumb");
+    breadcrumb.innerHTML = `
+        <a href="#" id="crumb-home">Home</a> /
+        <a href="#" id="crumb-field">${field}</a> /
+        <span>${category}</span>
+    `;
+
+    document.getElementById("crumb-home").onclick = () => init();
+    document.getElementById("crumb-field").onclick = () => {
+        document.getElementById("view-field").value = field;
+        loadCategories(field);
+    };
+}
+
+// -----------------------
+// Display Files
+// -----------------------
+async function loadFiles(field, category) {
+    updateBreadcrumb(field, category);
+
     const fileList = document.getElementById("file-list");
-    const searchBox = document.getElementById("search-box");
+    fileList.innerHTML = `<li>Loading...</li>`;
 
-    loadFields();
+    const files = await listFiles(field, category);
 
-    async function loadFields() {
-        const response = await fetch(`${BUCKET_URL}?list-type=2&delimiter=/&prefix=uploadedfiles/`);
-        const xml = new DOMParser().parseFromString(await response.text(), "application/xml");
+    fileList.innerHTML = files
+        .map(file => {
+            const link = `${window.BUCKET_URL}/uploadedfiles/${field}/${category}/${file}`;
+            return `<li><a href="${link}" target="_blank">${file}</a></li>`;
+        })
+        .join("");
+}
 
-        const prefixes = [...xml.getElementsByTagName("Prefix")];
-        fieldSelect.innerHTML = "";
+// -----------------------
+// Load Categories (UI update)
+// -----------------------
+async function loadCategories(field) {
+    const categorySelect = document.getElementById("view-category");
+    categorySelect.innerHTML = `<option value="">-- Select Category --</option>`;
 
-        prefixes.forEach(p => {
-            let field = p.textContent.replace("uploadedfiles/", "").replace("/", "");
-            if (field) {
-                let opt = document.createElement("option");
-                opt.value = field;
-                opt.textContent = field;
-                fieldSelect.appendChild(opt);
-            }
-        });
+    const categories = await listCategories(field);
 
-        loadCategories();
-    }
+    categories.forEach(cat => {
+        const opt = document.createElement("option");
+        opt.value = cat;
+        opt.textContent = cat;
+        categorySelect.appendChild(opt);
+    });
 
-    async function loadCategories() {
-        const field = fieldSelect.value;
-        categorySelect.innerHTML = "";
+    document.getElementById("file-list").innerHTML = "";
+}
 
-        const response = await fetch(`${BUCKET_URL}?list-type=2&delimiter=/&prefix=uploadedfiles/${field}/`);
-        const xml = new DOMParser().parseFromString(await response.text(), "application/xml");
+// -----------------------
+// GLOBAL SEARCH (works anywhere)
+// -----------------------
+document.getElementById("search-box").addEventListener("input", async function () {
+    const query = this.value.trim().toLowerCase();
+    const fileList = document.getElementById("file-list");
 
-        const prefixes = [...xml.getElementsByTagName("Prefix")];
-
-        prefixes.forEach(p => {
-            let category = p.textContent.replace(`uploadedfiles/${field}/`, "").replace("/", "");
-            if (category) {
-                let opt = document.createElement("option");
-                opt.value = category;
-                opt.textContent = category;
-                categorySelect.appendChild(opt);
-            }
-        });
-
-        loadFiles();
-    }
-
-    async function loadFiles() {
+    if (query.length < 2) {
         fileList.innerHTML = "";
+        return;
+    }
 
-        const search = searchBox.value.toLowerCase();
+    let resultsHTML = "<li><strong>Searching...</strong></li>";
+    fileList.innerHTML = resultsHTML;
 
-        // GLOBAL SEARCH MODE
-        if (search.length > 0) {
-            const allResponse = await fetch(`${BUCKET_URL}?list-type=2&prefix=uploadedfiles/`);
-            const xml = new DOMParser().parseFromString(await allResponse.text(), "application/xml");
-            const contents = [...xml.getElementsByTagName("Contents")];
+    const fields = await listFields();
+    let results = [];
 
-            contents.forEach(c => {
-                let key = c.getElementsByTagName("Key")[0].textContent;
+    for (const field of fields) {
+        const categories = await listCategories(field);
 
-                if (key.endsWith("/")) return;
+        for (const cat of categories) {
+            const files = await listFiles(field, cat);
 
-                let name = key.split("/").pop();
-
-                if (name.toLowerCase().includes(search)) {
-                    let li = document.createElement("li");
-                    li.innerHTML = `<a href="${BUCKET_URL}/${key}" target="_blank">${name}</a>`;
-                    fileList.appendChild(li);
+            files.forEach(file => {
+                if (file.toLowerCase().includes(query)) {
+                    const link = `${window.BUCKET_URL}/uploadedfiles/${field}/${cat}/${file}`;
+                    results.push(`<li><a href="${link}" target="_blank">${file}</a> <em>(${field} / ${cat})</em></li>`);
                 }
             });
-
-            return;
         }
-
-        // Normal load
-        const field = fieldSelect.value;
-        const category = categorySelect.value;
-        const response = await fetch(`${BUCKET_URL}?list-type=2&prefix=uploadedfiles/${field}/${category}/`);
-
-        const xml = new DOMParser().parseFromString(await response.text(), "application/xml");
-        const contents = [...xml.getElementsByTagName("Contents")];
-
-        contents.forEach(c => {
-            let key = c.getElementsByTagName("Key")[0].textContent;
-
-            if (key.endsWith("/")) return;
-
-            let name = key.split("/").pop();
-
-            let li = document.createElement("li");
-            li.innerHTML = `<a href="${BUCKET_URL}/${key}" target="_blank">${name}</a>`;
-            fileList.appendChild(li);
-        });
     }
 
-    fieldSelect.addEventListener("change", loadCategories);
-    categorySelect.addEventListener("change", loadFiles);
-    searchBox.addEventListener("input", loadFiles);
+    fileList.innerHTML = results.length ? results.join("") : "<li>No results found.</li>";
 });
+
+// -----------------------
+// INIT
+// -----------------------
+async function init() {
+    const fieldSelect = document.getElementById("view-field");
+    const categorySelect = document.getElementById("view-category");
+
+    fieldSelect.innerHTML = `<option value="">-- Select Field --</option>`;
+    categorySelect.innerHTML = `<option value="">-- Select Category --</option>`;
+    document.getElementById("file-list").innerHTML = "";
+    document.getElementById("breadcrumb").innerHTML = "";
+
+    const fields = await listFields();
+
+    fields.forEach(f => {
+        const opt = document.createElement("option");
+        opt.value = f;
+        opt.textContent = f;
+        fieldSelect.appendChild(opt);
+    });
+}
+
+// Field changed
+document.getElementById("view-field").addEventListener("change", function () {
+    const field = this.value;
+    if (field) loadCategories(field);
+});
+
+// Category changed
+document.getElementById("view-category").addEventListener("change", function () {
+    const field = document.getElementById("view-field").value;
+    const category = this.value;
+    if (field && category) loadFiles(field, category);
+});
+
+init();

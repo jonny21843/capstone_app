@@ -1,84 +1,81 @@
 body {
     font-family: Arial, sans-serif;
-    background: #f4f7fc;
+    background: #f6f9ff;
     margin: 0;
     padding: 20px;
     text-align: center;
 }
 
 h1 {
-    color: #003f91;
-    margin-bottom: 30px;
-}
-
-.tabs {
-    margin-bottom: 30px;
-}
-
-.tab-button {
-    padding: 10px 20px;
-    border: none;
-    background: #1d5ef5;
-    color: white;
-    border-radius: 8px;
-    margin: 5px;
-    cursor: pointer;
-    font-size: 16px;
-}
-
-.tab-button.active {
-    background: #003f91;
+    font-size: 32px;
+    color: #0047b3;
 }
 
 .card {
     background: white;
-    width: 80%;
-    margin: auto;
     padding: 25px;
-    border-radius: 12px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    border-radius: 10px;
+    max-width: 900px;
+    margin: 30px auto;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     text-align: left;
 }
 
-.hidden {
+.tabs {
+    margin: 20px auto;
+}
+
+.tab-button {
+    background: #1a73e8;
+    color: white;
+    padding: 12px 25px;
+    border: none;
+    border-radius: 8px;
+    margin: 5px;
+    cursor: pointer;
+}
+
+.tab-button.active {
+    background: #003f9e;
+}
+
+.tab-section.hidden {
     display: none;
 }
 
-/* Upload Box B styling */
+/* Upload Drop Zone */
 .drop-zone {
     margin-top: 20px;
-    padding: 35px;
-    background: #eef4ff;
-    border: 2px dashed #3f7bfd;
+    padding: 40px;
+    border: 2px dashed #1a73e8;
     border-radius: 10px;
+    background: #eef4ff;
     text-align: center;
-    cursor: pointer;
+    color: #003f9e;
     font-size: 16px;
-    color: #003f91;
-    transition: 0.2s ease;
-}
-
-.drop-zone.dragover {
-    background: #dbe8ff;
-    border-color: #1d5ef5;
-}
-
-.primary-btn {
-    background: #1d5ef5;
-    color: white;
-    border: none;
-    padding: 10px 18px;
-    margin-top: 20px;
-    border-radius: 6px;
     cursor: pointer;
 }
 
-.search-box {
-    width: 200px;
-    padding: 8px;
-    margin-right: 20px;
+/* Breadcrumb */
+#breadcrumb {
+    margin-bottom: 20px;
+    font-size: 16px;
 }
 
-.hidden {
-    display: none;
+#breadcrumb a {
+    color: #0066cc;
+    text-decoration: none;
+}
+
+#breadcrumb a:hover {
+    text-decoration: underline;
+}
+
+#breadcrumb span {
+    margin: 0 8px;
+}
+
+/* File list */
+#file-list li {
+    margin: 6px 0;
 }

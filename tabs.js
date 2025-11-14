@@ -1,18 +1,14 @@
-document.addEventListener("DOMContentLoaded", () => {
-    const buttons = document.querySelectorAll(".tab-button");
-    const sections = document.querySelectorAll(".tab-section");
+// tabs.js - simple tab switching
+console.log("tabs.js loaded");
 
-    buttons.forEach(btn => {
-        btn.addEventListener("click", () => {
-            buttons.forEach(b => b.classList.remove("active"));
-            sections.forEach(s => s.classList.add("hidden"));
+document.querySelectorAll(".tab-button").forEach(btn => {
+    btn.addEventListener("click", () => {
+        const tab = btn.dataset.tab;
 
-            btn.classList.add("active");
+        document.querySelectorAll(".tab-section").forEach(sec => sec.classList.add("hidden"));
+        document.getElementById(tab).classList.remove("hidden");
 
-            const tab = btn.getAttribute("data-tab");
-            document.getElementById(tab).classList.remove("hidden");
-        });
+        document.querySelectorAll(".tab-button").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
     });
-
-    document.querySelector(".tab-button[data-tab='upload']").click();
 });
