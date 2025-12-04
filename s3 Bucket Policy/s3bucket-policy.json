@@ -2,26 +2,41 @@
     "Version": "2012-10-17",
     "Statement": [
         {
-            "Sid": "PublicWebsiteReadAccess",
+            "Sid": "AllowPublicRead",
             "Effect": "Allow",
             "Principal": "*",
             "Action": "s3:GetObject",
             "Resource": "arn:aws:s3:::dev-feagans-capstone/*"
         },
         {
-            "Sid": "PublicListUploadedFiles",
+            "Sid": "AllowRootFolderList",
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "s3:ListBucket",
+            "Resource": "arn:aws:s3:::dev-feagans-capstone",
+            "Condition": {
+                "StringEquals": {
+                    "s3:delimiter": "/"
+                }
+            }
+        },
+        {
+            "Sid": "AllowListingAllUploadedFiles",
             "Effect": "Allow",
             "Principal": "*",
             "Action": "s3:ListBucket",
             "Resource": "arn:aws:s3:::dev-feagans-capstone",
             "Condition": {
                 "StringLike": {
-                    "s3:prefix": "uploadedfiles/*"
+                    "s3:prefix": [
+                        "uploadedfiles/",
+                        "uploadedfiles/*"
+                    ]
                 }
             }
         },
         {
-            "Sid": "PublicPutUploadedFiles",
+            "Sid": "AllowUploadingToUploadedFiles",
             "Effect": "Allow",
             "Principal": "*",
             "Action": "s3:PutObject",
