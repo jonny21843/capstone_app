@@ -1,2 +1,2 @@
-window.BUCKET_URL = "https://dev-feagans-capstone.s3.amazonaws.com";
-window.BUCKET_NAME = "dev-feagans-capstone";
+window.BUCKET_URL = "Your S3 bucket URL";
+window.BUCKET_NAME = "S3 Bucket Name";
