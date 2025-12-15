@@ -4,72 +4,56 @@ This project is a secure, cloud-based file management web application built as p
 
 The application demonstrates real-world AWS architecture patterns including:
 
-Private S3 buckets
+- Private S3 buckets
 
-IAM role–based access
+- IAM role–based access
 
-Presigned URL uploads/downloads
+- Presigned URL uploads/downloads
 
-Reverse proxying with Nginx
+- Reverse proxying with Nginx
 
-Separation of static frontend and API backend
+- Separation of static frontend and API backend
 
 # Key Design Goals
 
-No public S3 access
+- No public S3 access
 
-No AWS credentials exposed to users
+- No AWS credentials exposed to users
 
-Scalable separation of frontend and backend
+- Scalable separation of frontend and backend
 
-Secure file handling using presigned URLs
+- Secure file handling using presigned URLs
 
 # Technology Stack
+
 Frontend
 
-HTML
+- HTML
 
-CSS
+- CSS
 
-Vanilla JavaScript
+- JavaScript
 
-Hosted via Nginx on EC2
+- Hosted via Nginx on EC2
 
 Backend API
 
-Python 3.9
+- Python 3.9
 
-Flask
+- Flask
 
-Boto3 (AWS SDK)
+- Boto3 (AWS SDK)
 
-Systemd service (presign-api.service)
+- Systemd service (presign-api.service)
 
 AWS Services
 
-Amazon EC2
+- Amazon EC2
 
-Amazon S3 (private buckets)
+- Amazon S3 (private buckets)
 
-IAM (instance roles)
+- IAM (instance roles)
  
-VPC Gateway Endpoint for S3
+- VPC endpoints 
 
-# Deployment Summary
-Dev Environment
 
-Separate S3 bucket
-
-Separate EC2 instance
-
-Same architecture as production
-
-Production Environment
-
-Private S3 bucket
-
-Nginx + Flask API on EC2
-
-IAM roles enforced
-
-Presigned URLs enabled
