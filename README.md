@@ -35,7 +35,19 @@ The application demonstrates real-world AWS architecture patterns including:
 - Amazon EC2
 - Amazon S3 (private buckets)
 - IAM (instance roles)
-- AWS Network Infastructure 
+
+# AWS Network Infrastructure
+
+The application is deployed within an AWS Virtual Private Cloud (VPC) to provide network-level isolation and security. Core networking components are managed outside of this code repository. 
+
+The network design includes:
+- A dedicated VPC for application resources
+- Public and private subnets to separate external access from internal services
+- Security groups enforcing least-privilege inbound and outbound traffic
+- VPC endpoints for private access to AWS services such as Amazon S3
+- Route tables and VPC peering for routing network traffic privately and publicly. 
+
+This network configuration ensures that application components communicate securely while minimizing exposure to the public internet.
 
 # Cloudflare Zero Trust & Domain Integration
 
