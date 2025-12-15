@@ -41,7 +41,14 @@
         <input type="file" id="file-input" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" hidden>
 
         <button id="upload-btn" class="primary-btn">Upload</button>
-        <div id="upload-status"></div>
+        <div class="upload-status-row">
+            <span id="upload-status-icon" class="status-icon"></span>
+            <span id="upload-status"></span>
+            </div>
+            <div class="upload-progress">
+            <div id="upload-progress-bar" class="upload-progress-bar"></div>
+            </div>
+
     </div>
 </section>
 
@@ -50,7 +57,7 @@
     <div class="card">
         <h2>Available Files</h2>
 
-        <div id="breadcrumb"></div>
+        <div id="breadcrumb">Home</div>
 
         <input id="search-box" class="search-box" placeholder="Search files...">
 
@@ -72,7 +79,7 @@
 <section id="about" class="tab-section hidden">
     <div class="card">
         <h2>About This Project</h2>
-        <p>This static site is hosted on Amazon S3. Users can upload categorized study notes into organized S3 folders.</p>
+        <p>This is Feagans Consulting Capstone Project. A way for all accesible users to share notes and documentaiton for whichever categories and fields they are working on or interested in!</p>
     </div>
 </section>
 

@@ -1,11 +1,16 @@
-console.log("UPLOAD.JS v3 LOADED");
+// upload.js - presign-only + progress + status icons
+console.log("UPLOAD.JS (presign-only + progress) LOADED");
 
-// S3 bucket base URL comes from config.js
-const BUCKET_URL = window.BUCKET_URL;
+// Helper to fetch JSON
+async function fetchJson(url, options) {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+        throw new Error(`Request failed ${response.status} for ${url}`);
+    }
+    return response.json();
+}
 
-/* =======================================
-   INIT
-======================================= */
+let selectedFile = null;
 
 document.addEventListener("DOMContentLoaded", () => {
     initUploadUI();
@@ -16,10 +21,14 @@ function initUploadUI() {
     const fileInput = document.getElementById("file-input");
     const uploadBtn = document.getElementById("upload-btn");
 
-    // Drag & drop / click behavior
+    if (!dropZone || !fileInput || !uploadBtn) {
+        console.error("UPLOAD: Missing elements.");
+        return;
+    }
+
     dropZone.addEventListener("click", () => fileInput.click());
 
-    dropZone.addEventListener("dragover", (e) => {
+    dropZone.addEventListener("dragover", e => {
         e.preventDefault();
         dropZone.classList.add("dragover");
     });
@@ -28,134 +37,163 @@ function initUploadUI() {
         dropZone.classList.remove("dragover");
     });
 
-    dropZone.addEventListener("drop", (e) => {
+    dropZone.addEventListener("drop", e => {
         e.preventDefault();
         dropZone.classList.remove("dragover");
-        if (e.dataTransfer.files.length > 0) {
-            fileInput.files = e.dataTransfer.files;
-            dropZone.textContent = "Selected: " + fileInput.files[0].name;
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            selectedFile = e.dataTransfer.files[0];
+            dropZone.textContent = "Selected: " + selectedFile.name;
         }
     });
 
     fileInput.addEventListener("change", () => {
-        if (fileInput.files.length > 0) {
-            dropZone.textContent = "Selected: " + fileInput.files[0].name;
+        if (fileInput.files && fileInput.files.length > 0) {
+            selectedFile = fileInput.files[0];
+            dropZone.textContent = "Selected: " + selectedFile.name;
         }
     });
 
     uploadBtn.addEventListener("click", uploadFile);
 
-    // Load existing fields/categories from S3
-    loadUploadFields();
+    loadUploadFields().catch(err => console.error("UPLOAD: load fields error", err));
 }
 
-/* =======================================
-   LOAD FIELDS & CATEGORIES FROM S3
-======================================= */
+// -------- list fields/categories via API --------
 
-// Populate the "Choose Field" dropdown from S3 prefixes
 async function loadUploadFields() {
     const fieldSelect = document.getElementById("upload-field");
     const categorySelect = document.getElementById("upload-category");
 
-    fieldSelect.innerHTML = "";
-    categorySelect.innerHTML = "";
+    fieldSelect.innerHTML = '<option value="">-- Select Field --</option>';
+    categorySelect.innerHTML = '<option value="">-- Select Category --</option>';
 
-    try {
-        const url = `${BUCKET_URL}/?list-type=2&prefix=uploadedfiles/&delimiter=/`;
-        const response = await fetch(url);
+    const data = await fetchJson("/api/list-fields");
+    const fields = data.fields || [];
 
-        if (!response.ok) {
-            console.error("Failed to list fields. Status:", response.status);
-            return;
+    for (const f of fields) {
+        const opt = document.createElement("option");
+        opt.value = f;
+        opt.textContent = f;
+        fieldSelect.appendChild(opt);
+    }
+
+    fieldSelect.onchange = () => {
+        const field = fieldSelect.value;
+        if (field) {
+            loadUploadCategories(field).catch(err =>
+                console.error("UPLOAD: load cats", err)
+            );
+        } else {
+            categorySelect.innerHTML =
+                '<option value="">-- Select Category --</option>';
         }
+    };
 
-        const text = await response.text();
-        const xml = new DOMParser().parseFromString(text, "application/xml");
-        const prefixes = [...xml.getElementsByTagName("CommonPrefixes")];
+    if (fields.length > 0) {
+        await loadUploadCategories(fields[0]);
+    }
+}
 
-        const fields = [];
-        for (const p of prefixes) {
-            const prefixNode = p.getElementsByTagName("Prefix")[0];
-            if (!prefixNode) continue;
-            const prefix = prefixNode.textContent; // e.g. uploadedfiles/Business/
-            const parts = prefix.split("/");
-            if (parts.length >= 2 && parts[1]) {
-                fields.push(parts[1]);
-            }
-        }
+async function loadUploadCategories(field) {
+    const categorySelect = document.getElementById("upload-category");
+    categorySelect.innerHTML = '<option value="">-- Select Category --</option>';
 
-        // Fill dropdown
-        for (const f of fields) {
-            const opt = document.createElement("option");
-            opt.value = f;
-            opt.textContent = f;
-            fieldSelect.appendChild(opt);
-        }
+    const encodedField = encodeURIComponent(field);
+    const data = await fetchJson(`/api/list-categories?field=${encodedField}`);
+    const categories = data.categories || [];
 
-        // When field changes, load categories for that field
-        fieldSelect.onchange = () => {
-            const field = fieldSelect.value;
-            if (field) {
-                loadUploadCategories(field);
-            } else {
-                categorySelect.innerHTML = "";
+    for (const c of categories) {
+        const opt = document.createElement("option");
+        opt.value = c;
+        opt.textContent = c;
+        categorySelect.appendChild(opt);
+    }
+}
+
+// -------- helper: upload with progress (XHR) --------
+
+function uploadWithProgress(url, file, onProgress) {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", url, true);
+        xhr.setRequestHeader(
+            "Content-Type",
+            file.type || "application/octet-stream"
+        );
+
+        xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable && typeof onProgress === "function") {
+                const percent = Math.round((event.loaded / event.total) * 100);
+                onProgress(percent);
             }
         };
 
-        // Auto-load categories for the first field (if any)
-        if (fields.length > 0) {
-            loadUploadCategories(fields[0]);
-        }
-
-    } catch (err) {
-        console.error("Error loading upload fields:", err);
-    }
-}
-
-// Populate "Choose Category" for a given field
-async function loadUploadCategories(field) {
-    const categorySelect = document.getElementById("upload-category");
-    categorySelect.innerHTML = "";
-
-    try {
-        const url = `${BUCKET_URL}/?list-type=2&prefix=uploadedfiles/${encodeURIComponent(field)}/&delimiter=/`;
-        const response = await fetch(url);
-
-        if (!response.ok) {
-            console.error("Failed to list categories. Status:", response.status);
-            return;
-        }
-
-        const text = await response.text();
-        const xml = new DOMParser().parseFromString(text, "application/xml");
-        const prefixes = [...xml.getElementsByTagName("CommonPrefixes")];
-
-        const categories = [];
-        for (const p of prefixes) {
-            const prefixNode = p.getElementsByTagName("Prefix")[0];
-            if (!prefixNode) continue;
-            const prefix = prefixNode.textContent; // uploadedfiles/Field/Category/
-            const parts = prefix.split("/");
-            if (parts.length >= 3 && parts[2]) {
-                categories.push(parts[2]);
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                onProgress(100);
+                resolve();
+            } else {
+                reject(
+                    new Error(
+                        "Upload failed with status " + xhr.status + " " + xhr.statusText
+                    )
+                );
             }
-        }
+        };
 
-        for (const c of categories) {
-            const opt = document.createElement("option");
-            opt.value = c;
-            opt.textContent = c;
-            categorySelect.appendChild(opt);
-        }
-    } catch (err) {
-        console.error("Error loading upload categories:", err);
+        xhr.onerror = () => {
+            reject(new Error("Network error during upload"));
+        };
+
+        xhr.send(file);
+    });
+}
+
+// -------- helpers: status & progress UI --------
+
+function resetStatusUI() {
+    const status = document.getElementById("upload-status");
+    const icon = document.getElementById("upload-status-icon");
+    const bar = document.getElementById("upload-progress-bar");
+
+    if (status) status.textContent = "";
+    if (icon) {
+        icon.classList.remove("success", "error");
+        icon.textContent = "";
+    }
+    if (bar) {
+        bar.style.width = "0%";
     }
 }
 
-/* =======================================
-   UPLOAD FILE
-======================================= */
+function setStatus(text, type) {
+    const status = document.getElementById("upload-status");
+    const icon = document.getElementById("upload-status-icon");
+
+    if (status) status.textContent = text || "";
+
+    if (icon) {
+        icon.classList.remove("success", "error");
+        if (type === "success") {
+            icon.classList.add("success");
+            icon.textContent = "✓";
+        } else if (type === "error") {
+            icon.classList.add("error");
+            icon.textContent = "✕";
+        } else {
+            icon.textContent = "";
+        }
+    }
+}
+
+function setProgress(percent) {
+    const bar = document.getElementById("upload-progress-bar");
+    if (bar) {
+        bar.style.width = `${Math.min(Math.max(percent, 0), 100)}%`;
+    }
+}
+
+// -------- upload via presigned URL only --------
 
 async function uploadFile() {
     const fieldSelect = document.getElementById("upload-field");
@@ -163,73 +201,70 @@ async function uploadFile() {
     const newFieldInput = document.getElementById("upload-new-field");
     const newCategoryInput = document.getElementById("upload-new-category");
     const fileInput = document.getElementById("file-input");
-    const status = document.getElementById("upload-status");
     const dropZone = document.getElementById("drop-zone");
 
-    status.textContent = "";
+    resetStatusUI();
 
-    const file = fileInput.files[0];
+    const fileFromInput = fileInput.files && fileInput.files[0];
+    const file = fileFromInput || selectedFile;
 
-    // Prefer NEW field/category text boxes if filled; otherwise use dropdowns
     const newField = (newFieldInput.value || "").trim();
     const newCategory = (newCategoryInput.value || "").trim();
 
-    const field = newField.length > 0
-        ? newField
-        : (fieldSelect.value || "").trim();
+    const field = newField || (fieldSelect.value || "").trim();
+    const category = newCategory || (categorySelect.value || "").trim();
 
-    const category = newCategory.length > 0
-        ? newCategory
-        : (categorySelect.value || "").trim();
-
-    console.log("UPLOAD.JS v3 using field/category:", {
-        newField,
-        newCategory,
-        finalField: field,
-        finalCategory: category
-    });
-
-    if (!file || !field || !category) {
-        status.textContent = "Please choose or create a field, a category, and a file.";
+    if (!file) {
+        setStatus("Please choose a file to upload.", "error");
+        return;
+    }
+    if (!field || !category) {
+        setStatus("Please choose or create a field and a category.", "error");
         return;
     }
 
-    // Clean for S3 key (avoid slashes)
-    const safeField = field.replace(/[/\\]/g, "_");
-    const safeCategory = category.replace(/[/\\]/g, "_");
-    const key = `uploadedfiles/${safeField}/${safeCategory}/${file.name}`;
-    const uploadUrl = `${BUCKET_URL}/${key}`;
-
-    console.log("Uploading to S3 key:", key);
-
-    status.textContent = "Uploading...";
-
     try {
-        const res = await fetch(uploadUrl, {
-            method: "PUT",
-            headers: {
-                "Content-Type": file.type || "application/octet-stream"
-            },
-            body: file
+        setStatus("Requesting upload URL...", null);
+
+        const presign = await fetchJson("/api/presign-upload", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                field,
+                category,
+                filename: file.name,
+                contentType: file.type || "application/octet-stream"
+            })
         });
 
-        if (!res.ok) {
-            throw new Error("S3 responded with status " + res.status);
+        const uploadUrl = presign.uploadUrl || presign.url;
+        if (!uploadUrl) {
+            throw new Error("Backend did not return uploadUrl/url.");
         }
 
-        status.textContent = "Upload successful!";
+        setStatus("Uploading...", null);
+        setProgress(0);
 
-        // Clear inputs
+        await uploadWithProgress(uploadUrl, file, (p) => {
+            setProgress(p);
+        });
+
+        setStatus("Upload successful!", "success");
+
+        // Clear inputs & reload dropdowns
         fileInput.value = "";
+        selectedFile = null;
         newFieldInput.value = "";
         newCategoryInput.value = "";
-        dropZone.textContent = "Drag & drop a file here or click to select";
+        if (dropZone) {
+            dropZone.textContent =
+                "Drag & drop a file here or click to select";
+        }
 
-        // Refresh dropdowns so the new field/category appear next time
         await loadUploadFields();
 
     } catch (err) {
-        console.error(err);
-        status.textContent = "Upload failed: " + err.message;
+        console.error("UPLOAD: upload failed", err);
+        setStatus("Upload failed: " + err.message, "error");
     }
 }
