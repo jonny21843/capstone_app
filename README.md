@@ -36,7 +36,7 @@ The application demonstrates real-world AWS architecture patterns including:
 - Amazon S3 (private buckets)
 - IAM (instance roles)
 
-# AWS Network Infrastructure
+## AWS Network Infrastructure
 
 The application is deployed within an AWS Virtual Private Cloud (VPC) to provide network-level isolation and security. Core networking components are managed outside of this code repository. 
 
