@@ -8,6 +8,16 @@ from botocore.exceptions import ClientError
 
 
 table = boto3.resource("dynamodb").Table(os.environ["NOTES_TABLE"])
+bucket_name = os.environ["NOTES_BUCKET"]
+max_file_bytes = int(os.environ.get("MAX_FILE_BYTES", str(20 * 1024 * 1024)))
+s3 = boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-east-2"))
+
+ALLOWED_TYPES = {
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+}
 
 
 def response(status_code, body):
@@ -44,7 +54,7 @@ def lambda_handler(event, context):
 
     key = (payload.get("key") or "").strip()
     filename = (payload.get("filename") or "").strip()
-    content_type = (payload.get("contentType") or "application/octet-stream").strip()
+    content_type = (payload.get("contentType") or "").strip().lower()
 
     expected_prefix = f"users/{user_id}/notes/{note_id}/original/"
     if not key.startswith(expected_prefix):
@@ -53,12 +63,36 @@ def lambda_handler(event, context):
     if not filename:
         return response(400, {"error": "filename is required"})
 
+    if content_type not in ALLOWED_TYPES:
+        s3.delete_object(Bucket=bucket_name, Key=key)
+        return response(400, {"error": "Unsupported uploaded file type"})
+
+    try:
+        metadata = s3.head_object(Bucket=bucket_name, Key=key)
+    except ClientError:
+        return response(400, {"error": "Uploaded file could not be verified"})
+
+    actual_size = int(metadata.get("ContentLength") or 0)
+    actual_type = (metadata.get("ContentType") or "").lower()
+
+    if actual_size <= 0 or actual_size > max_file_bytes:
+        s3.delete_object(Bucket=bucket_name, Key=key)
+        return response(
+            400,
+            {"error": f"Uploaded file exceeds the {max_file_bytes // (1024 * 1024)} MB limit"},
+        )
+
+    if actual_type not in ALLOWED_TYPES or actual_type != content_type:
+        s3.delete_object(Bucket=bucket_name, Key=key)
+        return response(400, {"error": "Uploaded file type verification failed"})
+
     now = datetime.now(timezone.utc).isoformat()
     file_record = {
         "fileId": str(uuid.uuid4()),
         "key": key,
         "filename": filename[:240],
-        "contentType": content_type[:120],
+        "contentType": actual_type,
+        "sizeBytes": actual_size,
         "uploadedAt": now,
     }
 
@@ -81,6 +115,7 @@ def lambda_handler(event, context):
         )
     except ClientError as error:
         if error.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            s3.delete_object(Bucket=bucket_name, Key=key)
             return response(404, {"error": "Note not found"})
         raise
 
