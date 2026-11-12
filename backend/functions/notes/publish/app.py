@@ -42,6 +42,7 @@ def lambda_handler(event, context):
         return response(400, {"error": "Request body must be valid JSON"})
 
     published = payload.get("published")
+    author_display_name = (payload.get("authorDisplayName") or "").strip()
     if not isinstance(published, bool):
         return response(400, {"error": "published must be true or false"})
 
@@ -57,15 +58,19 @@ def lambda_handler(event, context):
         if not note.get("files"):
             return response(400, {"error": "Upload at least one source file before publishing"})
 
+        if not author_display_name:
+            author_display_name = "Community member"
+
         result = table.update_item(
             Key={"userId": user_id, "noteId": note_id},
             UpdateExpression=(
                 "SET visibility = :public, publishedAt = :published_at, "
-                "updatedAt = :updated"
+                "publicAuthor = :public_author, updatedAt = :updated"
             ),
             ExpressionAttributeValues={
                 ":public": "public",
                 ":published_at": now,
+                ":public_author": author_display_name[:80],
                 ":updated": now,
             },
             ReturnValues="ALL_NEW",
