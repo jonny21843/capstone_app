@@ -6,5 +6,6 @@ const APP_CONFIG = {
     cognitoClientId: "3t79knetd0pdav5jsso0osfb1e",
     cognitoRedirectUri: "http://localhost:8080/auth/callback.html",
     cognitoLogoutUri: "http://localhost:8080/",
-    apiBaseUrl: "https://nxa9uz2cv0.execute-api.us-east-2.amazonaws.com"
+    apiBaseUrl: "https://nxa9uz2cv0.execute-api.us-east-2.amazonaws.com",
+    adminEmails: ["jonathan.feagans@outlook.com"]
 };
