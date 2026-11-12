@@ -34,6 +34,7 @@ def public_projection(note):
         "subject": note.get("subject", ""),
         "collection": note.get("collection", ""),
         "description": note.get("description", ""),
+        "publicAuthor": note.get("publicAuthor", "Community member"),
         "publishedAt": note.get("publishedAt"),
         "fileCount": len(note.get("files") or []),
     }
