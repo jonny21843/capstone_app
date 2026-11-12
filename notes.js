@@ -922,7 +922,12 @@ async function loadAdminAnalytics() {
 
     try {
         const response = await authenticatedFetch("/api/admin/analytics");
-        const data = await response.json();
+        let data = {};
+        try {
+            data = await response.json();
+        } catch {
+            data = {};
+        }
 
         if (response.status === 403) {
             notesState.isAdmin = false;
@@ -930,7 +935,9 @@ async function loadAdminAnalytics() {
             setActiveView("my-notes");
             return;
         }
-        if (!response.ok) throw new Error(data.error || "Unable to load analytics.");
+        if (!response.ok) {
+            throw new Error(data.error || `Unable to load analytics (HTTP ${response.status}).`);
+        }
 
         const metrics = data.metrics || {};
         document.getElementById("metric-users").textContent = Number(metrics.users || 0);
