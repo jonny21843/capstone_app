@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal
 import os
 from datetime import datetime, timezone
 
@@ -10,11 +11,17 @@ cognito = boto3.client("cognito-idp")
 user_pool_id = os.environ["COGNITO_USER_POOL_ID"]
 
 
+def json_default(value):
+    if isinstance(value, Decimal):
+        return int(value) if value % 1 == 0 else float(value)
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
 def response(status_code, body):
     return {
         "statusCode": status_code,
         "headers": {"Content-Type": "application/json"},
-        "body": json.dumps(body),
+        "body": json.dumps(body, default=json_default),
     }
 
 
