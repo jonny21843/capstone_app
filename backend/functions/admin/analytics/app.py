@@ -107,6 +107,10 @@ def lambda_handler(event, context):
     if not is_admin(event):
         return response(403, {"error": "Admin access required"})
 
+    params = event.get("queryStringParameters") or {}
+    if (str(params.get("probe") or "").lower() in {"1", "true", "yes"}:
+        return response(200, {"isAdmin": True})
+
     notes = scan_all_notes()
 
     public_notes = [note for note in notes if note.get("visibility") == "public"]
