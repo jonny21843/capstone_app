@@ -85,22 +85,31 @@ function isAuthenticated() {
     return Boolean(token && expiresAt && Date.now() < expiresAt);
 }
 
+function getApiBaseUrl() {
+    return (APP_CONFIG.apiBaseUrl || "").replace(/\/$/, "");
+}
+
 async function loadCurrentUser() {
     const token = getAccessToken();
+    const apiBaseUrl = getApiBaseUrl();
 
-    if (!token) {
+    if (!token || !apiBaseUrl) {
         return null;
     }
 
-    const response = await fetch("/api/me", {
+    const response = await fetch(`${apiBaseUrl}/api/me`, {
         headers: {
             Authorization: `Bearer ${token}`
         }
     });
 
-    if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
         clearTokens();
         return null;
+    }
+
+    if (!response.ok) {
+        throw new Error(`Current-user request failed with status ${response.status}`);
     }
 
     return response.json();
@@ -122,9 +131,15 @@ async function updateAuthUi() {
         return;
     }
 
-    status.textContent = "Checking session...";
     signInButton.hidden = true;
     signOutButton.hidden = false;
+
+    if (!getApiBaseUrl()) {
+        status.textContent = "Signed in";
+        return;
+    }
+
+    status.textContent = "Checking session...";
 
     try {
         const user = await loadCurrentUser();
