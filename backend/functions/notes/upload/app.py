@@ -11,6 +11,7 @@ table = boto3.resource("dynamodb").Table(os.environ["NOTES_TABLE"])
 bucket_name = os.environ["NOTES_BUCKET"]
 aws_region = os.environ.get("AWS_REGION", "us-east-2")
 max_file_bytes = int(os.environ.get("MAX_FILE_BYTES", str(20 * 1024 * 1024)))
+max_files_per_note = int(os.environ.get("MAX_FILES_PER_NOTE", "10"))
 
 s3 = boto3.client(
     "s3",
@@ -25,8 +26,10 @@ ALLOWED_TYPES = {
     "image/jpeg",
     "image/png",
     "image/webp",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }
-ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".webp"}
+ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".webp", ".ppt", ".pptx"}
 
 
 def response(status_code, body):
@@ -73,6 +76,12 @@ def lambda_handler(event, context):
     if not note:
         return response(404, {"error": "Note not found"})
 
+    if len(note.get("files") or []) >= max_files_per_note:
+        return response(
+            400,
+            {"error": f"A note can have at most {max_files_per_note} source files"},
+        )
+
     try:
         payload = json.loads(event.get("body") or "{}")
     except json.JSONDecodeError:
@@ -90,13 +99,13 @@ def lambda_handler(event, context):
     if not raw_filename or file_extension(raw_filename) not in ALLOWED_EXTENSIONS:
         return response(
             400,
-            {"error": "Only PDF, JPG, PNG, and WEBP files are allowed"},
+            {"error": "Only PDF, JPG, PNG, WEBP, PPT, and PPTX files are allowed"},
         )
 
     if content_type not in ALLOWED_TYPES:
         return response(
             400,
-            {"error": "Unsupported file type. Use PDF, JPG, PNG, or WEBP"},
+            {"error": "Unsupported file type. Use PDF, JPG, PNG, WEBP, PPT, or PPTX"},
         )
 
     if file_size <= 0:
