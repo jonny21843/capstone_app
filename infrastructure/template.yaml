@@ -61,6 +61,7 @@ Resources:
               - http://localhost:8080
             AllowedMethods:
               - PUT
+              - POST
               - GET
             AllowedHeaders:
               - "*"
