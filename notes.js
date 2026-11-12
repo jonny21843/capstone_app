@@ -500,7 +500,10 @@ async function setPublished(noteId, published) {
             {
                 method: "PATCH",
                 headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({published})
+                body: JSON.stringify({
+                    published,
+                    authorDisplayName: getPublicAuthorLabel()
+                })
             }
         );
 
@@ -563,6 +566,7 @@ async function loadPublicNotes() {
                     ${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("<span>·</span>")}
                 </div>
                 <p class="note-description">${escapeHtml(note.description || "")}</p>
+                <div class="note-meta"><span>Posted by ${escapeHtml(note.publicAuthor || "Community member")}</span></div>
                 <div class="note-card-footer">
                     <span class="note-date">${escapeHtml(formatDate(note.publishedAt))}</span>
                     <button class="button button-primary" type="button">View Note</button>
@@ -597,6 +601,7 @@ async function openPublicNote(noteId) {
                 ${[note.subject, note.collection].filter(Boolean).map((item) => `<span>${escapeHtml(item)}</span>`).join("<span>·</span>")}
             </div>
             <p class="note-description">${escapeHtml(note.description || "")}</p>
+            <div class="note-meta"><span>Posted by ${escapeHtml(note.publicAuthor || "Community member")}</span></div>
             <h3>Source notes</h3>
             <div class="source-viewer-list">
                 ${files.length
