@@ -49,12 +49,22 @@ def lambda_handler(event, context):
     if not note or note.get("visibility") != "public":
         return response(404, {"error": "Public note not found"})
 
-    view_result = table.update_item(
-        Key={"userId": note["userId"], "noteId": note_id},
-        UpdateExpression="ADD viewCount :one",
-        ExpressionAttributeValues={":one": 1},
-        ReturnValues="UPDATED_NEW",
-    )
+    try:
+        view_result = table.update_item(
+            Key={"userId": note["userId"], "noteId": note_id},
+            UpdateExpression="ADD viewCount :one",
+            ConditionExpression="attribute_exists(userId) AND attribute_exists(noteId) AND visibility = :public",
+            ExpressionAttributeValues={
+                ":one": 1,
+                ":public": "public",
+            },
+            ReturnValues="UPDATED_NEW",
+        )
+    except Exception as error:
+        if getattr(error, "response", {}).get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return response(404, {"error": "Public note not found"})
+        raise
+
     view_count = int(view_result.get("Attributes", {}).get("viewCount", 0))
 
     files = []
