@@ -230,12 +230,17 @@ function renderEmbeddedSource(file) {
         `;
     }
 
+    const isPowerPoint =
+        contentType === "application/vnd.ms-powerpoint" ||
+        contentType === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+        /\.(ppt|pptx)$/.test(filename);
+
     return `
         <section class="source-viewer-card">
             <div class="source-viewer-header">
                 <div>
                     <h3>${name}</h3>
-                    <p>Preview is not available for this file type.</p>
+                    <p>${isPowerPoint ? "PowerPoint source · preview not available yet." : "Preview is not available for this file type."}</p>
                 </div>
                 <a class="button button-primary" href="${url}" target="_blank" rel="noopener">
                     Open Original ↗
@@ -338,6 +343,11 @@ function renderNotes() {
         });
 
         card.querySelector("[data-upload-note]").addEventListener("click", () => {
+            if (fileCount >= 10) {
+                alert("A note can have at most 10 source files.");
+                return;
+            }
+
             notesState.uploadNoteId = note.noteId;
             const input = document.getElementById("note-upload-input");
             input.value = "";
@@ -448,12 +458,14 @@ async function uploadFileForNote(file, noteId) {
         "application/pdf",
         "image/jpeg",
         "image/png",
-        "image/webp"
+        "image/webp",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     ]);
     const maxFileBytes = 20 * 1024 * 1024;
 
     if (!allowedTypes.has(contentType)) {
-        status.textContent = "Unsupported file type. Use PDF, JPG, PNG, or WEBP.";
+        status.textContent = "Unsupported file type. Use PDF, JPG, PNG, WEBP, PPT, or PPTX.";
         status.className = "upload-status error";
         return;
     }
