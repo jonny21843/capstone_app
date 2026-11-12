@@ -112,6 +112,41 @@ Resources:
             Method: GET
             PayloadFormatVersion: "2.0"
 
+  ProfileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/functions/profile/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures: [x86_64]
+      MemorySize: 128
+      Timeout: 5
+      Environment:
+        Variables:
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+                - cognito-idp:AdminUpdateUserAttributes
+              Resource: !Sub "arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}"
+      Events:
+        GetProfile:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotesApi
+            Path: /api/profile
+            Method: GET
+            PayloadFormatVersion: "2.0"
+        UpdateProfile:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotesApi
+            Path: /api/profile
+            Method: PATCH
+            PayloadFormatVersion: "2.0"
+
   CreateNoteFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -301,9 +336,15 @@ Resources:
       Environment:
         Variables:
           NOTES_TABLE: !Ref NotesTable
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref NotesTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+              Resource: !Sub "arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}"
       Events:
         PublishNote:
           Type: HttpApi
