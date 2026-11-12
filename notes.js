@@ -2,7 +2,8 @@ const notesState = {
     notes: [],
     uploadNoteId: null,
     editingNoteId: null,
-    activeView: "my-notes"
+    activeView: "my-notes",
+    uploadInProgress: false
 };
 
 function apiUrl(path) {
@@ -319,7 +320,7 @@ function renderNotes() {
                     <span class="upload-status" data-upload-status></span>
                     <div class="note-actions">
                         <button class="button button-secondary" type="button" data-edit-note>Edit</button>
-                        <button class="button button-secondary" type="button" data-upload-note>Upload Source</button>
+                        <button class="button button-secondary" type="button" data-upload-note ${notesState.uploadInProgress ? "disabled" : ""}>${notesState.uploadInProgress ? "Upload in progress…" : "Upload Source"}</button>
                         <button class="button ${published ? "button-secondary" : "button-primary"}" type="button" data-publish-note>
                             ${published ? "Unpublish" : "Publish"}
                         </button>
@@ -343,6 +344,11 @@ function renderNotes() {
         });
 
         card.querySelector("[data-upload-note]").addEventListener("click", () => {
+            if (notesState.uploadInProgress) {
+                alert("Please wait for the current upload to finish before starting another one.");
+                return;
+            }
+
             if (fileCount >= 10) {
                 alert("A note can have at most 10 source files.");
                 return;
@@ -548,8 +554,21 @@ async function handleUploadSelection(event) {
     const noteId = notesState.uploadNoteId;
     if (!file || !noteId) return;
 
-    await uploadFileForNote(file, noteId);
-    notesState.uploadNoteId = null;
+    if (notesState.uploadInProgress) {
+        alert("Please wait for the current upload to finish before starting another one.");
+        return;
+    }
+
+    notesState.uploadInProgress = true;
+    renderNotes();
+
+    try {
+        await uploadFileForNote(file, noteId);
+    } finally {
+        notesState.uploadInProgress = false;
+        notesState.uploadNoteId = null;
+        renderNotes();
+    }
 }
 
 async function deleteSourceFile(note, fileId) {
