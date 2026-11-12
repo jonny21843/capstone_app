@@ -103,6 +103,67 @@ function noteMeta(note) {
     return [note.subject, note.collection].filter(Boolean);
 }
 
+function renderEmbeddedSource(file) {
+    const contentType = (file.contentType || "").toLowerCase();
+    const filename = (file.filename || "").toLowerCase();
+    const url = escapeHtml(file.viewUrl);
+    const name = escapeHtml(file.filename || "Source file");
+
+    if (contentType === "application/pdf" || filename.endsWith(".pdf")) {
+        return `
+            <section class="source-viewer-card">
+                <div class="source-viewer-header">
+                    <div>
+                        <h3>${name}</h3>
+                        <p>PDF source</p>
+                    </div>
+                    <a class="button button-secondary" href="${url}" target="_blank" rel="noopener">
+                        Open Original ↗
+                    </a>
+                </div>
+                <iframe
+                    class="source-pdf-frame"
+                    src="${url}#view=FitH"
+                    title="${name}"
+                ></iframe>
+            </section>
+        `;
+    }
+
+    if (contentType.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/.test(filename)) {
+        return `
+            <section class="source-viewer-card">
+                <div class="source-viewer-header">
+                    <div>
+                        <h3>${name}</h3>
+                        <p>Image source</p>
+                    </div>
+                    <a class="button button-secondary" href="${url}" target="_blank" rel="noopener">
+                        Open Original ↗
+                    </a>
+                </div>
+                <div class="source-image-wrap">
+                    <img class="source-image" src="${url}" alt="${name}">
+                </div>
+            </section>
+        `;
+    }
+
+    return `
+        <section class="source-viewer-card">
+            <div class="source-viewer-header">
+                <div>
+                    <h3>${name}</h3>
+                    <p>Preview is not available for this file type.</p>
+                </div>
+                <a class="button button-primary" href="${url}" target="_blank" rel="noopener">
+                    Open Original ↗
+                </a>
+            </div>
+        </section>
+    `;
+}
+
 function renderNotes() {
     const grid = document.getElementById("notes-grid");
     const status = document.getElementById("notes-status");
@@ -431,14 +492,11 @@ async function openPublicNote(noteId) {
                 ${[note.subject, note.collection].filter(Boolean).map((item) => `<span>${escapeHtml(item)}</span>`).join("<span>·</span>")}
             </div>
             <p class="note-description">${escapeHtml(note.description || "")}</p>
-            <h3>Source files</h3>
-            <div class="public-file-list">
-                ${files.map((file) => `
-                    <a class="public-file-link" href="${escapeHtml(file.viewUrl)}" target="_blank" rel="noopener">
-                        <span>${escapeHtml(file.filename)}</span>
-                        <span>Open ↗</span>
-                    </a>
-                `).join("")}
+            <h3>Source notes</h3>
+            <div class="source-viewer-list">
+                ${files.length
+                    ? files.map((file) => renderEmbeddedSource(file)).join("")
+                    : '<p class="note-description">No source files are available for this note.</p>'}
             </div>
         `;
 
