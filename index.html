@@ -26,6 +26,7 @@
             <button id="my-notes-tab" class="nav-button active" type="button">My Notes</button>
             <button id="explore-tab" class="nav-button" type="button">Explore</button>
             <button id="settings-tab" class="nav-button" type="button" hidden>Settings</button>
+            <button id="analytics-tab" class="nav-button" type="button" hidden>Analytics</button>
         </nav>
 
         <section id="my-notes-view">
@@ -107,6 +108,11 @@
                             <textarea id="note-description" maxlength="1200" rows="5" placeholder="What do these notes cover? Mention important topics, chapters, services, exam objectives, or keywords someone might search for."></textarea>
                         </label>
 
+                        <label class="description-field">
+                            Source file <span class="field-hint">(optional — one file at a time)</span>
+                            <input id="note-form-source" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.ppt,.pptx">
+                        </label>
+
                         <div class="form-actions">
                             <span id="create-note-status" class="status-text" aria-live="polite"></span>
                             <button id="note-form-submit" type="submit" class="button button-primary">Create Note</button>
@@ -157,6 +163,48 @@
             <section id="public-note-detail" class="card" hidden>
                 <button id="close-public-note" class="button button-text" type="button">← Back to Explore</button>
                 <div id="public-note-content"></div>
+            </section>
+        </section>
+
+        <section id="analytics-view" hidden>
+            <div class="dashboard-toolbar">
+                <div>
+                    <p class="eyebrow">Admin</p>
+                    <h2>Analytics</h2>
+                    <p class="subtitle">V1 product metrics for tracking usage as the app evolves.</p>
+                </div>
+                <button id="refresh-analytics" class="button button-secondary" type="button">Refresh</button>
+            </div>
+
+            <section id="analytics-status" class="status-card" aria-live="polite">Loading analytics...</section>
+
+            <section id="analytics-content" hidden>
+                <div class="analytics-grid">
+                    <article class="metric-card"><span>Users</span><strong id="metric-users">0</strong></article>
+                    <article class="metric-card"><span>Total notes</span><strong id="metric-notes">0</strong></article>
+                    <article class="metric-card"><span>Public notes</span><strong id="metric-public-notes">0</strong></article>
+                    <article class="metric-card"><span>Private notes</span><strong id="metric-private-notes">0</strong></article>
+                    <article class="metric-card"><span>Source files</span><strong id="metric-source-files">0</strong></article>
+                    <article class="metric-card"><span>Storage used</span><strong id="metric-storage">0 B</strong></article>
+                    <article class="metric-card"><span>Public views</span><strong id="metric-views">0</strong></article>
+                    <article class="metric-card"><span>Avg files / note</span><strong id="metric-average-files">0</strong></article>
+                </div>
+
+                <div class="analytics-detail-grid">
+                    <section class="card">
+                        <h3>Top subjects</h3>
+                        <div id="analytics-subjects" class="analytics-list"></div>
+                    </section>
+                    <section class="card">
+                        <h3>Top collections</h3>
+                        <div id="analytics-collections" class="analytics-list"></div>
+                    </section>
+                </div>
+
+                <section class="card">
+                    <h3>Recently published</h3>
+                    <div id="analytics-recent" class="analytics-list"></div>
+                </section>
             </section>
         </section>
 
