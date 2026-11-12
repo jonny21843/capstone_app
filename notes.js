@@ -273,6 +273,8 @@ async function uploadFileForNote(file, noteId) {
         status.className = "upload-status";
     }
 
+    let presign;
+
     try {
         const presignResponse = await authenticatedFetch(
             `/api/notes/${encodeURIComponent(noteId)}/upload`,
@@ -288,16 +290,40 @@ async function uploadFileForNote(file, noteId) {
             }
         );
 
-        const presign = await presignResponse.json();
+        const responseText = await presignResponse.text();
+
+        try {
+            presign = responseText ? JSON.parse(responseText) : {};
+        } catch {
+            presign = {};
+        }
 
         if (!presignResponse.ok) {
-            throw new Error(presign.error || "Unable to prepare upload.");
+            throw new Error(
+                presign.error ||
+                responseText ||
+                `Upload URL request failed with status ${presignResponse.status}`
+            );
         }
+
+        if (!presign.uploadUrl) {
+            throw new Error("Upload URL response did not include uploadUrl.");
+        }
+    } catch (error) {
+        console.error("Upload URL request failed:", error);
 
         if (status) {
-            status.textContent = "Uploading...";
+            status.textContent = `Could not prepare upload: ${error.message || "request failed"}`;
+            status.className = "upload-status error";
         }
+        return;
+    }
 
+    if (status) {
+        status.textContent = "Uploading to private storage...";
+    }
+
+    try {
         const uploadResponse = await fetch(presign.uploadUrl, {
             method: "PUT",
             headers: {
@@ -307,7 +333,11 @@ async function uploadFileForNote(file, noteId) {
         });
 
         if (!uploadResponse.ok) {
-            throw new Error(`Upload failed with status ${uploadResponse.status}`);
+            const errorText = await uploadResponse.text();
+            throw new Error(
+                errorText ||
+                `S3 upload failed with status ${uploadResponse.status}`
+            );
         }
 
         if (status) {
@@ -315,10 +345,15 @@ async function uploadFileForNote(file, noteId) {
             status.className = "upload-status success";
         }
     } catch (error) {
-        console.error("Upload failed:", error);
+        console.error("Direct S3 upload failed:", error);
 
         if (status) {
-            status.textContent = error.message || "Upload failed";
+            const message =
+                error instanceof TypeError && error.message === "Failed to fetch"
+                    ? "S3 upload blocked by the browser (likely CORS)."
+                    : error.message || "S3 upload failed";
+
+            status.textContent = message;
             status.className = "upload-status error";
         }
     }
