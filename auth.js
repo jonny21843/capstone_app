@@ -89,6 +89,41 @@ function getApiBaseUrl() {
     return (APP_CONFIG.apiBaseUrl || "").replace(/\/$/, "");
 }
 
+function decodeJwtPayload(token) {
+    if (!token) {
+        return null;
+    }
+
+    try {
+        const payload = token.split(".")[1]
+            .replace(/-/g, "+")
+            .replace(/_/g, "/");
+        const padded = payload.padEnd(
+            payload.length + ((4 - payload.length % 4) % 4),
+            "="
+        );
+
+        return JSON.parse(
+            decodeURIComponent(
+                Array.from(atob(padded))
+                    .map((char) =>
+                        "%" + char.charCodeAt(0).toString(16).padStart(2, "0")
+                    )
+                    .join("")
+            )
+        );
+    } catch (error) {
+        console.error("Unable to decode ID token:", error);
+        return null;
+    }
+}
+
+function getDisplayIdentity() {
+    const claims = decodeJwtPayload(sessionStorage.getItem("id_token"));
+
+    return claims?.email || claims?.name || null;
+}
+
 async function loadCurrentUser() {
     const token = getAccessToken();
     const apiBaseUrl = getApiBaseUrl();
@@ -134,12 +169,14 @@ async function updateAuthUi() {
     signInButton.hidden = true;
     signOutButton.hidden = false;
 
+    const displayIdentity = getDisplayIdentity();
+    status.textContent = displayIdentity
+        ? `Signed in as ${displayIdentity}`
+        : "Signed in";
+
     if (!getApiBaseUrl()) {
-        status.textContent = "Signed in";
         return;
     }
-
-    status.textContent = "Checking session...";
 
     try {
         const user = await loadCurrentUser();
@@ -148,15 +185,9 @@ async function updateAuthUi() {
             status.textContent = "Not signed in";
             signInButton.hidden = false;
             signOutButton.hidden = true;
-            return;
         }
-
-        status.textContent = user.username
-            ? `Signed in as ${user.username}`
-            : "Signed in";
     } catch (error) {
         console.error("Unable to verify current user:", error);
-        status.textContent = "Signed in";
     }
 }
 
