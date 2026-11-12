@@ -1,6 +1,7 @@
 const notesState = {
     notes: [],
-    uploadNoteId: null
+    uploadNoteId: null,
+    activeView: "my-notes"
 };
 
 function apiUrl(path) {
@@ -9,18 +10,12 @@ function apiUrl(path) {
 
 async function authenticatedFetch(path, options = {}) {
     const token = getAccessToken();
-
-    if (!token) {
-        throw new Error("Please sign in first.");
-    }
+    if (!token) throw new Error("Please sign in first.");
 
     const headers = new Headers(options.headers || {});
     headers.set("Authorization", `Bearer ${token}`);
 
-    const response = await fetch(apiUrl(path), {
-        ...options,
-        headers
-    });
+    const response = await fetch(apiUrl(path), { ...options, headers });
 
     if (response.status === 401 || response.status === 403) {
         clearTokens();
@@ -32,135 +27,46 @@ async function authenticatedFetch(path, options = {}) {
     return response;
 }
 
+function setActiveView(view) {
+    notesState.activeView = view;
+    document.getElementById("my-notes-view").hidden = view !== "my-notes";
+    document.getElementById("explore-view").hidden = view !== "explore";
+    document.getElementById("my-notes-tab").classList.toggle("active", view === "my-notes");
+    document.getElementById("explore-tab").classList.toggle("active", view === "explore");
+
+    if (view === "explore") {
+        loadPublicNotes();
+    }
+}
+
 function renderSignedInState() {
-    const signedOutPanel = document.getElementById("signed-out-panel");
-    const notesApp = document.getElementById("notes-app");
     const signedIn = isAuthenticated();
-
-    if (signedOutPanel) {
-        signedOutPanel.hidden = signedIn;
-    }
-
-    if (notesApp) {
-        notesApp.hidden = !signedIn;
-    }
+    document.getElementById("signed-out-panel").hidden = signedIn;
+    document.getElementById("notes-app").hidden = !signedIn;
 }
 
 function showCreatePanel(show) {
     const panel = document.getElementById("create-note-panel");
-
-    if (!panel) {
-        return;
-    }
-
     panel.hidden = !show;
-
-    if (show) {
-        document.getElementById("note-title")?.focus();
-    }
+    if (show) document.getElementById("note-title")?.focus();
 }
 
 function setCreateStatus(message, type = "") {
     const element = document.getElementById("create-note-status");
-
-    if (!element) {
-        return;
-    }
-
     element.textContent = message || "";
     element.className = `status-text ${type}`.trim();
 }
 
 function formatDate(value) {
-    if (!value) {
-        return "";
-    }
-
+    if (!value) return "";
     const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-        return "";
-    }
+    if (Number.isNaN(date.getTime())) return "";
 
     return new Intl.DateTimeFormat(undefined, {
         month: "short",
         day: "numeric",
         year: "numeric"
     }).format(date);
-}
-
-function noteMeta(note) {
-    return [note.subject, note.collection].filter(Boolean);
-}
-
-function renderNotes() {
-    const grid = document.getElementById("notes-grid");
-    const status = document.getElementById("notes-status");
-
-    if (!grid || !status) {
-        return;
-    }
-
-    grid.innerHTML = "";
-
-    if (notesState.notes.length === 0) {
-        status.hidden = true;
-
-        const empty = document.createElement("div");
-        empty.className = "empty-state";
-        empty.innerHTML = `
-            <h3>No notes yet</h3>
-            <p>Create your first note, then upload a PDF or image of your source material.</p>
-            <button class="button button-primary" type="button">+ Create Your First Note</button>
-        `;
-
-        empty.querySelector("button")?.addEventListener("click", () => {
-            showCreatePanel(true);
-        });
-
-        grid.appendChild(empty);
-        return;
-    }
-
-    status.hidden = true;
-
-    notesState.notes.forEach((note) => {
-        const card = document.createElement("article");
-        card.className = "note-card";
-
-        const meta = noteMeta(note);
-        const metaHtml = meta.length
-            ? meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("<span>·</span>")
-            : "<span>Uncategorized</span>";
-
-        card.innerHTML = `
-            <span class="badge">${escapeHtml(note.visibility || "private")}</span>
-            <h3>${escapeHtml(note.title || "Untitled Note")}</h3>
-            <div class="note-meta">${metaHtml}</div>
-            <div class="note-card-footer">
-                <span class="note-date">${escapeHtml(formatDate(note.createdAt))}</span>
-                <div class="upload-block">
-                    <span class="upload-status" data-upload-status></span>
-                    <button class="button button-secondary" type="button" data-upload-note>
-                        Upload Source
-                    </button>
-                </div>
-            </div>
-        `;
-
-        card.querySelector("[data-upload-note]")?.addEventListener("click", () => {
-            notesState.uploadNoteId = note.noteId;
-            const fileInput = document.getElementById("note-upload-input");
-
-            if (fileInput) {
-                fileInput.value = "";
-                fileInput.click();
-            }
-        });
-
-        card.dataset.noteId = note.noteId;
-        grid.appendChild(card);
-    });
 }
 
 function escapeHtml(value) {
@@ -172,13 +78,81 @@ function escapeHtml(value) {
         .replaceAll("'", "&#039;");
 }
 
-function setNotesStatus(message, isError = false) {
-    const status = document.getElementById("notes-status");
+function noteMeta(note) {
+    return [note.subject, note.collection].filter(Boolean);
+}
 
-    if (!status) {
+function renderNotes() {
+    const grid = document.getElementById("notes-grid");
+    const status = document.getElementById("notes-status");
+    grid.innerHTML = "";
+
+    if (notesState.notes.length === 0) {
+        status.hidden = true;
+        const empty = document.createElement("div");
+        empty.className = "empty-state";
+        empty.innerHTML = `
+            <h3>No notes yet</h3>
+            <p>Create your first note, add a description, and upload a PDF or image.</p>
+            <button class="button button-primary" type="button">+ Create Your First Note</button>
+        `;
+        empty.querySelector("button").addEventListener("click", () => showCreatePanel(true));
+        grid.appendChild(empty);
         return;
     }
 
+    status.hidden = true;
+
+    notesState.notes.forEach((note) => {
+        const card = document.createElement("article");
+        card.className = "note-card";
+        card.dataset.noteId = note.noteId;
+
+        const meta = noteMeta(note);
+        const metaHtml = meta.length
+            ? meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("<span>·</span>")
+            : "<span>Uncategorized</span>";
+
+        const fileCount = (note.files || []).length;
+        const published = note.visibility === "public";
+
+        card.innerHTML = `
+            <span class="badge">${escapeHtml(note.visibility || "private")}</span>
+            <h3>${escapeHtml(note.title || "Untitled Note")}</h3>
+            <div class="note-meta">${metaHtml}</div>
+            <p class="note-description">${escapeHtml(note.description || "No description yet.")}</p>
+            <div class="note-meta"><span>${fileCount} source file${fileCount === 1 ? "" : "s"}</span></div>
+            <div class="note-card-footer">
+                <span class="note-date">${escapeHtml(formatDate(note.publishedAt || note.createdAt))}</span>
+                <div class="upload-block">
+                    <span class="upload-status" data-upload-status></span>
+                    <div class="note-actions">
+                        <button class="button button-secondary" type="button" data-upload-note>Upload Source</button>
+                        <button class="button ${published ? "button-secondary" : "button-primary"}" type="button" data-publish-note>
+                            ${published ? "Unpublish" : "Publish"}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        card.querySelector("[data-upload-note]").addEventListener("click", () => {
+            notesState.uploadNoteId = note.noteId;
+            const input = document.getElementById("note-upload-input");
+            input.value = "";
+            input.click();
+        });
+
+        card.querySelector("[data-publish-note]").addEventListener("click", () => {
+            setPublished(note.noteId, !published);
+        });
+
+        grid.appendChild(card);
+    });
+}
+
+function setNotesStatus(message, isError = false) {
+    const status = document.getElementById("notes-status");
     status.hidden = false;
     status.textContent = message;
     status.style.color = isError ? "#b42318" : "";
@@ -195,11 +169,7 @@ async function loadNotes() {
 
     try {
         const response = await authenticatedFetch("/api/notes");
-
-        if (!response.ok) {
-            const text = await response.text();
-            throw new Error(text || `Unable to load notes (${response.status})`);
-        }
+        if (!response.ok) throw new Error(await response.text() || `Unable to load notes (${response.status})`);
 
         const data = await response.json();
         notesState.notes = data.notes || [];
@@ -214,9 +184,10 @@ async function createNote(event) {
     event.preventDefault();
 
     const form = event.currentTarget;
-    const title = document.getElementById("note-title")?.value.trim() || "";
-    const subject = document.getElementById("note-subject")?.value.trim() || "";
-    const collection = document.getElementById("note-collection")?.value.trim() || "";
+    const title = document.getElementById("note-title").value.trim();
+    const subject = document.getElementById("note-subject").value.trim();
+    const collection = document.getElementById("note-collection").value.trim();
+    const description = document.getElementById("note-description").value.trim();
     const submitButton = form.querySelector('button[type="submit"]');
 
     if (!title) {
@@ -230,28 +201,17 @@ async function createNote(event) {
     try {
         const response = await authenticatedFetch("/api/notes", {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                title,
-                subject,
-                collection
-            })
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({title, subject, collection, description})
         });
 
         const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.error || "Unable to create note.");
-        }
+        if (!response.ok) throw new Error(data.error || "Unable to create note.");
 
         form.reset();
-        setCreateStatus("Note created.", "success");
         showCreatePanel(false);
         await loadNotes();
     } catch (error) {
-        console.error("Create note failed:", error);
         setCreateStatus(error.message || "Unable to create note.", "error");
     } finally {
         submitButton.disabled = false;
@@ -259,138 +219,221 @@ async function createNote(event) {
 }
 
 function findUploadStatus(noteId) {
-    const card = document.querySelector(`.note-card[data-note-id="${CSS.escape(noteId)}"]`);
-
-    return card?.querySelector("[data-upload-status]") || null;
+    return document
+        .querySelector(`.note-card[data-note-id="${CSS.escape(noteId)}"]`)
+        ?.querySelector("[data-upload-status]") || null;
 }
 
 async function uploadFileForNote(file, noteId) {
     const status = findUploadStatus(noteId);
     const contentType = file.type || "application/octet-stream";
-
-    if (status) {
-        status.textContent = "Preparing upload...";
-        status.className = "upload-status";
-    }
-
-    let presign;
+    status.textContent = "Preparing upload...";
+    status.className = "upload-status";
 
     try {
         const presignResponse = await authenticatedFetch(
             `/api/notes/${encodeURIComponent(noteId)}/upload`,
             {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({filename: file.name, contentType})
+            }
+        );
+
+        const presign = await presignResponse.json();
+        if (!presignResponse.ok) throw new Error(presign.error || "Unable to prepare upload.");
+
+        status.textContent = "Uploading...";
+
+        const uploadResponse = await fetch(presign.uploadUrl, {
+            method: "PUT",
+            headers: {"Content-Type": contentType},
+            body: file
+        });
+
+        if (!uploadResponse.ok) throw new Error(`S3 upload failed with status ${uploadResponse.status}`);
+
+        status.textContent = "Saving file...";
+        const registerResponse = await authenticatedFetch(
+            `/api/notes/${encodeURIComponent(noteId)}/files`,
+            {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({
+                    key: presign.key,
                     filename: file.name,
                     contentType
                 })
             }
         );
 
-        const responseText = await presignResponse.text();
+        const registered = await registerResponse.json();
+        if (!registerResponse.ok) throw new Error(registered.error || "Uploaded, but could not register file.");
 
-        try {
-            presign = responseText ? JSON.parse(responseText) : {};
-        } catch {
-            presign = {};
-        }
-
-        if (!presignResponse.ok) {
-            throw new Error(
-                presign.error ||
-                responseText ||
-                `Upload URL request failed with status ${presignResponse.status}`
-            );
-        }
-
-        if (!presign.uploadUrl) {
-            throw new Error("Upload URL response did not include uploadUrl.");
-        }
+        status.textContent = "Uploaded successfully";
+        status.className = "upload-status success";
+        await loadNotes();
     } catch (error) {
-        console.error("Upload URL request failed:", error);
-
-        if (status) {
-            status.textContent = `Could not prepare upload: ${error.message || "request failed"}`;
-            status.className = "upload-status error";
-        }
-        return;
-    }
-
-    if (status) {
-        status.textContent = "Uploading to private storage...";
-    }
-
-    try {
-        const uploadResponse = await fetch(presign.uploadUrl, {
-            method: "PUT",
-            headers: {
-                "Content-Type": contentType
-            },
-            body: file
-        });
-
-        if (!uploadResponse.ok) {
-            const errorText = await uploadResponse.text();
-            throw new Error(
-                errorText ||
-                `S3 upload failed with status ${uploadResponse.status}`
-            );
-        }
-
-        if (status) {
-            status.textContent = "Uploaded successfully";
-            status.className = "upload-status success";
-        }
-    } catch (error) {
-        console.error("Direct S3 upload failed:", error);
-
-        if (status) {
-            const message =
-                error instanceof TypeError && error.message === "Failed to fetch"
-                    ? "S3 upload blocked by the browser (likely CORS)."
-                    : error.message || "S3 upload failed";
-
-            status.textContent = message;
-            status.className = "upload-status error";
-        }
+        console.error("Upload failed:", error);
+        status.textContent = error.message || "Upload failed";
+        status.className = "upload-status error";
     }
 }
 
 async function handleUploadSelection(event) {
     const file = event.target.files?.[0];
     const noteId = notesState.uploadNoteId;
-
-    if (!file || !noteId) {
-        return;
-    }
+    if (!file || !noteId) return;
 
     await uploadFileForNote(file, noteId);
     notesState.uploadNoteId = null;
 }
 
+async function setPublished(noteId, published) {
+    try {
+        const response = await authenticatedFetch(
+            `/api/notes/${encodeURIComponent(noteId)}/publish`,
+            {
+                method: "PATCH",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({published})
+            }
+        );
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Unable to update publishing status.");
+
+        await loadNotes();
+        if (notesState.activeView === "explore") await loadPublicNotes();
+    } catch (error) {
+        alert(error.message || "Unable to update publishing status.");
+    }
+}
+
+function setPublicStatus(message, isError = false) {
+    const status = document.getElementById("public-status");
+    status.hidden = false;
+    status.textContent = message;
+    status.style.color = isError ? "#b42318" : "";
+}
+
+async function loadPublicNotes() {
+    const grid = document.getElementById("public-grid");
+    const detail = document.getElementById("public-note-detail");
+    const query = document.getElementById("public-search").value.trim();
+
+    detail.hidden = true;
+    grid.hidden = false;
+    grid.innerHTML = "";
+    setPublicStatus("Loading public notes...");
+
+    try {
+        const url = new URL(apiUrl("/api/public/notes"));
+        if (query) url.searchParams.set("q", query);
+
+        const response = await fetch(url);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Unable to load public notes.");
+
+        const notes = data.notes || [];
+        document.getElementById("public-status").hidden = true;
+
+        if (!notes.length) {
+            grid.innerHTML = `
+                <div class="empty-state">
+                    <h3>No public notes found</h3>
+                    <p>Try a different keyword or check back as the community library grows.</p>
+                </div>
+            `;
+            return;
+        }
+
+        notes.forEach((note) => {
+            const card = document.createElement("article");
+            card.className = "note-card";
+            const meta = [note.subject, note.collection].filter(Boolean);
+            card.innerHTML = `
+                <span class="badge">Public</span>
+                <h3>${escapeHtml(note.title)}</h3>
+                <div class="note-meta">
+                    ${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("<span>·</span>")}
+                </div>
+                <p class="note-description">${escapeHtml(note.description || "")}</p>
+                <div class="note-card-footer">
+                    <span class="note-date">${escapeHtml(formatDate(note.publishedAt))}</span>
+                    <button class="button button-primary" type="button">View Note</button>
+                </div>
+            `;
+            card.querySelector("button").addEventListener("click", () => openPublicNote(note.noteId));
+            grid.appendChild(card);
+        });
+    } catch (error) {
+        console.error("Unable to load public notes:", error);
+        setPublicStatus(error.message || "Unable to load public notes.", true);
+    }
+}
+
+async function openPublicNote(noteId) {
+    const grid = document.getElementById("public-grid");
+    const detail = document.getElementById("public-note-detail");
+    const content = document.getElementById("public-note-content");
+
+    try {
+        const response = await fetch(apiUrl(`/api/public/notes/${encodeURIComponent(noteId)}`));
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Unable to open note.");
+
+        const note = data.note;
+        const files = note.files || [];
+
+        content.innerHTML = `
+            <p class="eyebrow">Published note</p>
+            <h2>${escapeHtml(note.title)}</h2>
+            <div class="note-meta">
+                ${[note.subject, note.collection].filter(Boolean).map((item) => `<span>${escapeHtml(item)}</span>`).join("<span>·</span>")}
+            </div>
+            <p class="note-description">${escapeHtml(note.description || "")}</p>
+            <h3>Source files</h3>
+            <div class="public-file-list">
+                ${files.map((file) => `
+                    <a class="public-file-link" href="${escapeHtml(file.viewUrl)}" target="_blank" rel="noopener">
+                        <span>${escapeHtml(file.filename)}</span>
+                        <span>Open ↗</span>
+                    </a>
+                `).join("")}
+            </div>
+        `;
+
+        grid.hidden = true;
+        document.getElementById("public-status").hidden = true;
+        detail.hidden = false;
+    } catch (error) {
+        setPublicStatus(error.message || "Unable to open note.", true);
+    }
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     renderSignedInState();
 
-    document.getElementById("hero-sign-in-btn")?.addEventListener("click", signIn);
-    document.getElementById("new-note-btn")?.addEventListener("click", () => {
+    document.getElementById("hero-sign-in-btn").addEventListener("click", signIn);
+    document.getElementById("my-notes-tab").addEventListener("click", () => setActiveView("my-notes"));
+    document.getElementById("explore-tab").addEventListener("click", () => setActiveView("explore"));
+    document.getElementById("new-note-btn").addEventListener("click", () => {
         setCreateStatus("");
         showCreatePanel(true);
     });
-    document.getElementById("cancel-note-btn")?.addEventListener("click", () => {
-        setCreateStatus("");
-        showCreatePanel(false);
+    document.getElementById("cancel-note-btn").addEventListener("click", () => showCreatePanel(false));
+    document.getElementById("create-note-form").addEventListener("submit", createNote);
+    document.getElementById("note-upload-input").addEventListener("change", handleUploadSelection);
+    document.getElementById("public-search-btn").addEventListener("click", loadPublicNotes);
+    document.getElementById("public-search-clear").addEventListener("click", () => {
+        document.getElementById("public-search").value = "";
+        loadPublicNotes();
     });
-    document.getElementById("create-note-form")?.addEventListener("submit", createNote);
-    document.getElementById("note-upload-input")?.addEventListener("change", handleUploadSelection);
-
-    if (isAuthenticated()) {
-        await loadNotes();
-    }
-
-    window.addEventListener("focus", () => {
-        renderSignedInState();
+    document.getElementById("public-search").addEventListener("keydown", (event) => {
+        if (event.key === "Enter") loadPublicNotes();
     });
+    document.getElementById("close-public-note").addEventListener("click", loadPublicNotes);
+
+    if (isAuthenticated()) await loadNotes();
 });
