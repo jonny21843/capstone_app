@@ -42,8 +42,17 @@ function setActiveView(view) {
 
 function renderSignedInState() {
     const signedIn = isAuthenticated();
-    document.getElementById("signed-out-panel").hidden = signedIn;
-    document.getElementById("notes-app").hidden = !signedIn;
+    const signedOutPanel = document.getElementById("signed-out-panel");
+    const notesApp = document.getElementById("notes-app");
+    const myNotesTab = document.getElementById("my-notes-tab");
+
+    signedOutPanel.hidden = signedIn;
+    notesApp.hidden = !signedIn;
+    myNotesTab.hidden = !signedIn;
+
+    if (!signedIn && notesState.activeView === "my-notes") {
+        setActiveView("explore");
+    }
 }
 
 function showCreatePanel(show) {
