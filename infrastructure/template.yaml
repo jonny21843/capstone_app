@@ -73,6 +73,16 @@ Resources:
     Type: AWS::Serverless::HttpApi
     Properties:
       StageName: "$default"
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 30
+        ThrottlingRateLimit: 15
+      RouteSettings:
+        "POST /api/notes/{noteId}/upload":
+          ThrottlingBurstLimit: 2
+          ThrottlingRateLimit: 1
+        "POST /api/notes/{noteId}/files":
+          ThrottlingBurstLimit: 4
+          ThrottlingRateLimit: 2
       CorsConfiguration:
         AllowOrigins:
           - http://localhost:8080
