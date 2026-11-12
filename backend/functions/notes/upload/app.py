@@ -10,6 +10,7 @@ from botocore.config import Config
 table = boto3.resource("dynamodb").Table(os.environ["NOTES_TABLE"])
 bucket_name = os.environ["NOTES_BUCKET"]
 aws_region = os.environ.get("AWS_REGION", "us-east-2")
+max_file_bytes = int(os.environ.get("MAX_FILE_BYTES", str(20 * 1024 * 1024)))
 
 s3 = boto3.client(
     "s3",
@@ -19,6 +20,13 @@ s3 = boto3.client(
 )
 
 SAFE_FILENAME = re.compile(r"[^A-Za-z0-9._ -]+")
+ALLOWED_TYPES = {
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+}
+ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".webp"}
 
 
 def response(status_code, body):
@@ -44,6 +52,14 @@ def safe_filename(value):
     return cleaned[:180] or "upload"
 
 
+def file_extension(filename):
+    lowered = filename.lower()
+    for extension in ALLOWED_EXTENSIONS:
+        if lowered.endswith(extension):
+            return extension
+    return ""
+
+
 def lambda_handler(event, context):
     user_id = current_user_id(event)
     if not user_id:
@@ -62,8 +78,35 @@ def lambda_handler(event, context):
     except json.JSONDecodeError:
         return response(400, {"error": "Request body must be valid JSON"})
 
-    filename = safe_filename(payload.get("filename"))
-    content_type = (payload.get("contentType") or "application/octet-stream").strip()
+    raw_filename = (payload.get("filename") or "").strip()
+    filename = safe_filename(raw_filename)
+    content_type = (payload.get("contentType") or "").strip().lower()
+
+    try:
+        file_size = int(payload.get("fileSize") or 0)
+    except (TypeError, ValueError):
+        file_size = 0
+
+    if not raw_filename or file_extension(raw_filename) not in ALLOWED_EXTENSIONS:
+        return response(
+            400,
+            {"error": "Only PDF, JPG, PNG, and WEBP files are allowed"},
+        )
+
+    if content_type not in ALLOWED_TYPES:
+        return response(
+            400,
+            {"error": "Unsupported file type. Use PDF, JPG, PNG, or WEBP"},
+        )
+
+    if file_size <= 0:
+        return response(400, {"error": "File size is required"})
+
+    if file_size > max_file_bytes:
+        return response(
+            400,
+            {"error": f"File is too large. Maximum size is {max_file_bytes // (1024 * 1024)} MB"},
+        )
 
     object_id = str(uuid.uuid4())
     key = f"users/{user_id}/notes/{note_id}/original/{object_id}-{filename}"
@@ -84,5 +127,6 @@ def lambda_handler(event, context):
             "uploadUrl": upload_url,
             "key": key,
             "expiresIn": 300,
+            "maxFileBytes": max_file_bytes,
         },
     )
