@@ -38,6 +38,34 @@
             </section>
 
             <section id="notes-app" hidden>
+                <section id="profile-panel" class="card" hidden>
+                    <div class="card-heading">
+                        <div>
+                            <p class="eyebrow">Profile</p>
+                            <h3>Complete your profile</h3>
+                            <p>Your public notes will show only your first name and last initial, such as Jonathan F.</p>
+                        </div>
+                    </div>
+
+                    <form id="profile-form" class="note-form">
+                        <div class="form-grid">
+                            <label>
+                                First name
+                                <input id="profile-first-name" maxlength="60" autocomplete="given-name" required>
+                            </label>
+                            <label>
+                                Last name
+                                <input id="profile-last-name" maxlength="60" autocomplete="family-name" required>
+                            </label>
+                        </div>
+
+                        <div class="form-actions">
+                            <span id="profile-status" class="status-text" aria-live="polite"></span>
+                            <button id="profile-submit" type="submit" class="button button-primary">Save Profile</button>
+                        </div>
+                    </form>
+                </section>
+
                 <div class="dashboard-toolbar">
                     <div>
                         <p class="eyebrow">Library</p>
