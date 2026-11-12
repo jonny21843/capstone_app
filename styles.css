@@ -403,7 +403,7 @@ h3 {
 
 .search-row {
     display: grid;
-    grid-template-columns: minmax(260px, 1fr) minmax(150px, auto) minmax(140px, auto) auto auto;
+    grid-template-columns: minmax(230px, 1fr) minmax(135px, auto) minmax(145px, auto) minmax(135px, auto) auto auto;
     gap: 10px;
     margin-bottom: 18px;
 }
@@ -569,4 +569,76 @@ h3 {
 
 .note-card {
     min-width: 0;
+}
+
+
+.owner-source-info {
+    display: grid;
+    min-width: 0;
+    flex: 1 1 auto;
+    gap: 2px;
+}
+
+.owner-source-info > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.owner-source-info small {
+    color: #98a2b3;
+}
+
+.source-actions {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: flex-end;
+}
+
+.button-mini {
+    padding: 5px 7px;
+    background: #f2f4f7;
+    color: #475467;
+    font-size: 0.74rem;
+}
+
+.button-mini:hover {
+    background: #e4e7ec;
+}
+
+.pagination-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin: 24px 0;
+}
+
+.profile-preview {
+    margin: 16px 0 0;
+    color: #475467;
+    font-size: 0.9rem;
+}
+
+.public-detail-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin: -4px 0 20px;
+}
+
+@media (max-width: 720px) {
+    .owner-source-row {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .source-actions {
+        justify-content: flex-start;
+    }
+
+    .pagination-row {
+        flex-wrap: wrap;
+    }
 }
