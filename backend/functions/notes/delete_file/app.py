@@ -52,30 +52,55 @@ def lambda_handler(event, context):
         return response(404, {"error": "Note not found"})
 
     files = note.get("files") or []
-    target = next((item for item in files if item.get("fileId") == file_id), None)
-    if not target:
+    target_index = next(
+        (index for index, item in enumerate(files) if item.get("fileId") == file_id),
+        None,
+    )
+
+    if target_index is None:
         return response(404, {"error": "Source file not found"})
+
+    target = files[target_index]
+    now = datetime.now(timezone.utc).isoformat()
+
+    update_expression = f"SET updatedAt = :updated REMOVE #files[{target_index}]"
+    values = {
+        ":updated": now,
+        ":file_id": file_id,
+    }
+
+    if len(files) == 1:
+        update_expression = (
+            f"SET updatedAt = :updated, processingStatus = :created "
+            f"REMOVE #files[{target_index}]"
+        )
+        values[":created"] = "created"
+
+    try:
+        result = table.update_item(
+            Key={"userId": user_id, "noteId": note_id},
+            UpdateExpression=update_expression,
+            ConditionExpression=(
+                f"attribute_exists(userId) AND attribute_exists(noteId) AND "
+                f"#files[{target_index}].#file_id = :file_id"
+            ),
+            ExpressionAttributeNames={
+                "#files": "files",
+                "#file_id": "fileId",
+            },
+            ExpressionAttributeValues=values,
+            ReturnValues="ALL_NEW",
+        )
+    except Exception as error:
+        if getattr(error, "response", {}).get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return response(
+                409,
+                {"error": "This note changed while removing the file. Please retry."},
+            )
+        raise
 
     key = target.get("key")
     if key:
         s3.delete_object(Bucket=bucket_name, Key=key)
-
-    remaining = [item for item in files if item.get("fileId") != file_id]
-    now = datetime.now(timezone.utc).isoformat()
-
-    update_expression = "SET #files = :files, updatedAt = :updated"
-    values = {":files": remaining, ":updated": now}
-
-    if not remaining:
-        update_expression += ", processingStatus = :created"
-        values[":created"] = "created"
-
-    result = table.update_item(
-        Key={"userId": user_id, "noteId": note_id},
-        UpdateExpression=update_expression,
-        ExpressionAttributeNames={"#files": "files"},
-        ExpressionAttributeValues=values,
-        ReturnValues="ALL_NEW",
-    )
 
     return response(200, {"note": result.get("Attributes", {})})
