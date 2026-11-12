@@ -232,6 +232,7 @@ Resources:
         Variables:
           NOTES_TABLE: !Ref NotesTable
           NOTES_BUCKET: !Ref NotesBucket
+          MAX_FILE_BYTES: 20971520
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref NotesTable
@@ -258,9 +259,13 @@ Resources:
       Environment:
         Variables:
           NOTES_TABLE: !Ref NotesTable
+          NOTES_BUCKET: !Ref NotesBucket
+          MAX_FILE_BYTES: 20971520
       Policies:
         - DynamoDBWritePolicy:
             TableName: !Ref NotesTable
+        - S3CrudPolicy:
+            BucketName: !Ref NotesBucket
       Events:
         RegisterFile:
           Type: HttpApi
