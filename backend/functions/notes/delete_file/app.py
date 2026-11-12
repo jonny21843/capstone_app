@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal
 import os
 from datetime import datetime, timezone
 
@@ -10,11 +11,17 @@ s3 = boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-east-2"))
 bucket_name = os.environ["NOTES_BUCKET"]
 
 
+def json_default(value):
+    if isinstance(value, Decimal):
+        return int(value) if value % 1 == 0 else float(value)
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
 def response(status_code, body):
     return {
         "statusCode": status_code,
         "headers": {"Content-Type": "application/json"},
-        "body": json.dumps(body),
+        "body": json.dumps(body, default=json_default),
     }
 
 
