@@ -41,13 +41,27 @@ def public_projection(note):
 
 
 def lambda_handler(event, context):
-    query = ((event.get("queryStringParameters") or {}).get("q") or "").strip().lower()
+    params = event.get("queryStringParameters") or {}
+    query = (params.get("q") or "").strip().lower()
+    subject = (params.get("subject") or "").strip().lower()
+    sort = (params.get("sort") or "newest").strip().lower()
 
     result = table.scan(
         FilterExpression=Attr("visibility").eq("public"),
         Limit=200,
     )
-    notes = result.get("Items", [])
+    all_public = result.get("Items", [])
+
+    subjects = sorted(
+        {
+            (note.get("subject") or "").strip()
+            for note in all_public
+            if (note.get("subject") or "").strip()
+        },
+        key=str.lower,
+    )
+
+    notes = all_public
 
     if query:
         keywords = [part for part in query.split() if part]
@@ -57,6 +71,24 @@ def lambda_handler(event, context):
             if all(keyword in searchable_text(note) for keyword in keywords)
         ]
 
-    notes.sort(key=lambda note: note.get("publishedAt", ""), reverse=True)
+    if subject:
+        notes = [
+            note
+            for note in notes
+            if (note.get("subject") or "").strip().lower() == subject
+        ]
 
-    return response(200, {"notes": [public_projection(note) for note in notes]})
+    if sort == "oldest":
+        notes.sort(key=lambda note: note.get("publishedAt", ""))
+    elif sort == "title":
+        notes.sort(key=lambda note: (note.get("title") or "").lower())
+    else:
+        notes.sort(key=lambda note: note.get("publishedAt", ""), reverse=True)
+
+    return response(
+        200,
+        {
+            "notes": [public_projection(note) for note in notes],
+            "subjects": subjects,
+        },
+    )
