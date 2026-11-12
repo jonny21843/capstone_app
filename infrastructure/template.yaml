@@ -277,6 +277,13 @@ Resources:
             Path: /api/notes/{noteId}/files
             Method: POST
             PayloadFormatVersion: "2.0"
+        UpdateFile:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotesApi
+            Path: /api/notes/{noteId}/files/{fileId}
+            Method: PATCH
+            PayloadFormatVersion: "2.0"
 
   DeleteSourceFileFunction:
     Type: AWS::Serverless::Function
@@ -402,7 +409,7 @@ Resources:
           NOTES_TABLE: !Ref NotesTable
           NOTES_BUCKET: !Ref NotesBucket
       Policies:
-        - DynamoDBReadPolicy:
+        - DynamoDBCrudPolicy:
             TableName: !Ref NotesTable
         - S3ReadPolicy:
             BucketName: !Ref NotesBucket
