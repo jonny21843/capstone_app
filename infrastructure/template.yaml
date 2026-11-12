@@ -233,6 +233,7 @@ Resources:
           NOTES_TABLE: !Ref NotesTable
           NOTES_BUCKET: !Ref NotesBucket
           MAX_FILE_BYTES: 20971520
+          MAX_FILES_PER_NOTE: 10
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref NotesTable
@@ -261,6 +262,7 @@ Resources:
           NOTES_TABLE: !Ref NotesTable
           NOTES_BUCKET: !Ref NotesBucket
           MAX_FILE_BYTES: 20971520
+          MAX_FILES_PER_NOTE: 10
       Policies:
         - DynamoDBWritePolicy:
             TableName: !Ref NotesTable
