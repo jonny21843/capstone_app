@@ -11,6 +11,7 @@ from botocore.exceptions import ClientError
 table = boto3.resource("dynamodb").Table(os.environ["NOTES_TABLE"])
 bucket_name = os.environ["NOTES_BUCKET"]
 max_file_bytes = int(os.environ.get("MAX_FILE_BYTES", str(20 * 1024 * 1024)))
+max_files_per_note = int(os.environ.get("MAX_FILES_PER_NOTE", "10"))
 s3 = boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-east-2"))
 
 ALLOWED_TYPES = {
@@ -18,6 +19,8 @@ ALLOWED_TYPES = {
     "image/jpeg",
     "image/png",
     "image/webp",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }
 
 
@@ -69,6 +72,18 @@ def lambda_handler(event, context):
 
     if not filename:
         return response(400, {"error": "filename is required"})
+
+    note = table.get_item(Key={"userId": user_id, "noteId": note_id}).get("Item")
+    if not note:
+        s3.delete_object(Bucket=bucket_name, Key=key)
+        return response(404, {"error": "Note not found"})
+
+    if len(note.get("files") or []) >= max_files_per_note:
+        s3.delete_object(Bucket=bucket_name, Key=key)
+        return response(
+            400,
+            {"error": f"A note can have at most {max_files_per_note} source files"},
+        )
 
     if content_type not in ALLOWED_TYPES:
         s3.delete_object(Bucket=bucket_name, Key=key)
