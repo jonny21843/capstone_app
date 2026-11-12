@@ -1,62 +1,71 @@
-# Overview
+# Notes App
 
-This project is a secure, cloud-based file management web application built as part of my graduate capstone. It allows users to upload, browse, search, and download files organized by field and category classifications, while enforcing private S3 access through presigned URLs and IAM roles.
+This repository is being rebuilt from the original graduate capstone into a personal notes and study platform.
 
-The application demonstrates real-world AWS architecture patterns including:
+The long-term goal is to let users upload and organize notes, convert handwritten notes to searchable text, create quizzes and flashcards, and share study material with other users.
 
-- Private S3 buckets
-- IAM role–based access
-- Presigned URL uploads and downloads
-- Reverse proxying with Nginx
-- Separation of static frontend and API backend
+## Current direction
 
-# Key Design Goals
+The project is moving to a serverless AWS architecture:
 
-- No public S3 access
-- No AWS credentials exposed to users
-- Scalable separation of frontend and backend
-- Secure file handling using presigned URLs
+- Amazon Cognito for user registration and sign-in
+- Amazon CloudFront for the web frontend
+- Amazon S3 for static frontend assets and uploaded source files
+- Amazon API Gateway HTTP API for backend endpoints
+- AWS Lambda for backend logic
+- Amazon DynamoDB for note metadata, sharing permissions, study content, and usage records
+- Amazon Textract for handwriting/OCR processing later
 
-# Technology Stack
+The previous EC2, Nginx, Flask, systemd, VPC, and Cloudflare Zero Trust deployment is no longer the target architecture.
 
-## Frontend
-- HTML
-- CSS
-- JavaScript
-- Hosted via Nginx on EC2
+## Authentication milestone
 
-## Backend API
-- Python 3.9
-- Flask
-- Boto3 (AWS SDK)
-- Systemd service (presign-api.service)
+The current feature branch implements the first authentication milestone:
 
-## AWS Services
-- Amazon EC2
-- Amazon S3 (private buckets)
-- IAM (instance roles)
+1. The browser starts Cognito managed login with OAuth authorization code + PKCE.
+2. Cognito redirects back to `/auth/callback.html`.
+3. The callback exchanges the authorization code for tokens.
+4. The frontend sends the Cognito access token to `GET /api/me`.
+5. API Gateway validates the Cognito JWT.
+6. Lambda returns the authenticated Cognito user ID.
 
-## AWS Network Infrastructure
+The API Gateway/Lambda infrastructure is defined in:
 
-The application is deployed within an AWS Virtual Private Cloud (VPC) to provide network-level isolation and security. Core networking components are managed outside of this code repository. 
+```
+infrastructure/template.yaml
+```
 
-The network design includes:
-- A dedicated VPC for application resources
-- Public and private subnets to separate external access from internal services
-- Security groups enforcing least-privilege inbound and outbound traffic
-- VPC endpoints for private access to AWS services such as Amazon S3
-- Route tables and VPC peering for routing network traffic privately and publicly. 
+The first Lambda function is:
 
-This network configuration ensures that application components communicate securely while minimizing exposure to the public internet.
+```
+backend/functions/me/app.py
+```
 
-# Cloudflare Zero Trust & Domain Integration
+## Existing prototype
 
-This project uses Cloudflare Zero Trust in combination with a custom domain to securely expose application functionality while keeping underlying AWS infrastructure private. Rather than exposing EC2 instances or APIs directly via public IPs, all access is routed through Cloudflare’s edge network and governed by identity-based policies.
+The root-level `app.py`, `upload.js`, and `view.js` files are retained temporarily from the original capstone so useful upload and browsing behavior can be referenced while the application is migrated.
 
-## Core Cloudflare Zero Trust Components Used
+New backend functionality should be added under `backend/` and deployed through infrastructure-as-code instead of adding new Flask routes.
 
-- Cloudflare Tunnel (cloudflared)
-- Zero Trust Access Policies (identity-based access control)
-- Domain routing
+## Development configuration
 
-Together, these components ensure that application access is authenticated and authorized before reaching AWS resources, while keeping the underlying infrastructure private and protected.
+Frontend Cognito configuration currently lives in `config.js`.
+
+After the serverless API is deployed, set:
+
+```javascript
+apiBaseUrl: "https://YOUR_API_ID.execute-api.us-east-2.amazonaws.com"
+```
+
+Do not commit AWS access keys, secret access keys, Cognito client secrets, access tokens, ID tokens, or refresh tokens.
+
+## Planned milestones
+
+- Cognito login and protected `/api/me`
+- User-owned note metadata in DynamoDB
+- User-specific presigned S3 uploads
+- Handwriting/OCR processing
+- Editable extracted notes
+- Flashcard and quiz generation
+- Sharing and public study sets
+- Free and paid usage tiers
