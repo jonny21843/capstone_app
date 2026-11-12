@@ -498,13 +498,23 @@ async function uploadFileForNote(file, noteId) {
 
         status.textContent = "Uploading...";
 
+        const uploadBody = new FormData();
+        Object.entries(presign.uploadFields || {}).forEach(([name, value]) => {
+            uploadBody.append(name, value);
+        });
+        uploadBody.append("file", file);
+
         const uploadResponse = await fetch(presign.uploadUrl, {
-            method: "PUT",
-            headers: {"Content-Type": contentType},
-            body: file
+            method: "POST",
+            body: uploadBody
         });
 
-        if (!uploadResponse.ok) throw new Error(`S3 upload failed with status ${uploadResponse.status}`);
+        if (!uploadResponse.ok) {
+            if (uploadResponse.status === 400 || uploadResponse.status === 403) {
+                throw new Error("Upload was rejected by storage. Check the file type and 20 MB size limit.");
+            }
+            throw new Error(`S3 upload failed with status ${uploadResponse.status}`);
+        }
 
         status.textContent = "Saving file...";
         const registerResponse = await authenticatedFetch(
