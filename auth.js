@@ -124,6 +124,30 @@ function getDisplayIdentity() {
     return claims?.email || claims?.name || null;
 }
 
+function getPublicAuthorLabel() {
+    const claims = decodeJwtPayload(sessionStorage.getItem("id_token")) || {};
+    const givenName = (claims.given_name || "").trim();
+    const familyName = (claims.family_name || "").trim();
+
+    if (givenName && familyName) {
+        return `${givenName} ${familyName.charAt(0).toUpperCase()}.`;
+    }
+
+    if (claims.name) {
+        const parts = String(claims.name).trim().split(/\s+/).filter(Boolean);
+
+        if (parts.length >= 2) {
+            return `${parts[0]} ${parts[parts.length - 1].charAt(0).toUpperCase()}.`;
+        }
+
+        if (parts.length === 1) {
+            return parts[0];
+        }
+    }
+
+    return "Community member";
+}
+
 async function loadCurrentUser() {
     const token = getAccessToken();
     const apiBaseUrl = getApiBaseUrl();
