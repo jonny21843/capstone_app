@@ -81,19 +81,22 @@ def scan_all_notes():
 def count_users():
     total = 0
     pagination_token = None
-    while True:
-        args = {
-            "UserPoolId": user_pool_id,
-            "Limit": 60,
-        }
-        if pagination_token:
-            args["PaginationToken"] = pagination_token
-        result = cognito.list_users(**args)
-        total += len(result.get("Users", []))
-        pagination_token = result.get("PaginationToken")
-        if not pagination_token:
-            break
-    return total
+    try:
+        while True:
+            args = {
+                "UserPoolId": user_pool_id,
+                "Limit": 60,
+            }
+            if pagination_token:
+                args["PaginationToken"] = pagination_token
+            result = cognito.list_users(**args)
+            total += len(result.get("Users", []))
+            pagination_token = result.get("PaginationToken")
+            if not pagination_token:
+                break
+        return total, None
+    except Exception as error:
+        return None, f"{type(error).__name__}: {error}"
 
 
 def top_values(counter, limit=8):
@@ -104,14 +107,32 @@ def top_values(counter, limit=8):
 
 
 def lambda_handler(event, context):
-    if not is_admin(event):
-        return response(403, {"error": "Admin access required"})
+    try:
+        if not is_admin(event):
+            return response(403, {"error": "Admin access required"})
+    except Exception as error:
+        return response(
+            500,
+            {
+                "error": "Unable to verify admin access",
+                "detail": f"{type(error).__name__}: {error}",
+            },
+        )
 
     params = event.get("queryStringParameters") or {}
     if (str(params.get("probe") or "").lower() in {"1", "true", "yes"}:
         return response(200, {"isAdmin": True})
 
-    notes = scan_all_notes()
+    try:
+        notes = scan_all_notes()
+    except Exception as error:
+        return response(
+            500,
+            {
+                "error": "Unable to read notes for analytics",
+                "detail": f"{type(error).__name__}: {error}",
+            },
+        )
 
     public_notes = [note for note in notes if note.get("visibility") == "public"]
     private_notes = [note for note in notes if note.get("visibility") != "public"]
@@ -124,12 +145,26 @@ def lambda_handler(event, context):
 
     for note in notes:
         files = note.get("files") or []
-        total_files += len(files)
-        total_storage_bytes += sum(int(file.get("sizeBytes") or 0) for file in files)
-        total_views += int(note.get("viewCount") or 0)
+        if not isinstance(files, list):
+            files = []
 
-        subject = (note.get("subject") or "").strip()
-        collection = (note.get("collection") or "").strip()
+        total_files += len(files)
+
+        for file in files:
+            if not isinstance(file, dict):
+                continue
+            try:
+                total_storage_bytes += int(file.get("sizeBytes") or 0)
+            except (TypeError, ValueError, ArithmeticError):
+                pass
+
+        try:
+            total_views += int(note.get("viewCount") or 0)
+        except (TypeError, ValueError, ArithmeticError):
+            pass
+
+        subject = str(note.get("subject") or "").strip()
+        collection = str(note.get("collection") or "").strip()
         if subject:
             subjects[subject] += 1
         if collection:
@@ -141,12 +176,14 @@ def lambda_handler(event, context):
         reverse=True,
     )[:10]
 
+    user_count, user_count_error = count_users()
+
     return response(
         200,
         {
             "isAdmin": True,
             "metrics": {
-                "users": count_users(),
+                "users": user_count,
                 "notes": len(notes),
                 "publicNotes": len(public_notes),
                 "privateNotes": len(private_notes),
@@ -155,6 +192,11 @@ def lambda_handler(event, context):
                 "views": total_views,
                 "averageFilesPerNote": round(total_files / len(notes), 2) if notes else 0,
             },
+            "warnings": (
+                [{"code": "USER_COUNT_UNAVAILABLE", "message": user_count_error}]
+                if user_count_error
+                else []
+            ),
             "topSubjects": top_values(subjects),
             "topCollections": top_values(collections),
             "recentPublished": [
