@@ -28,6 +28,78 @@ async function authenticatedFetch(path, options = {}) {
     return response;
 }
 
+async function loadProfile() {
+    if (!isAuthenticated()) {
+        return null;
+    }
+
+    const response = await authenticatedFetch("/api/profile");
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(data.error || "Unable to load profile.");
+    }
+
+    return data.profile;
+}
+
+function showProfilePanel(profile) {
+    const panel = document.getElementById("profile-panel");
+
+    if (!panel) {
+        return;
+    }
+
+    const complete = Boolean(profile?.complete);
+    panel.hidden = complete;
+
+    if (!complete) {
+        document.getElementById("profile-first-name").value = profile?.firstName || "";
+        document.getElementById("profile-last-name").value = profile?.lastName || "";
+    }
+}
+
+async function saveProfile(event) {
+    event.preventDefault();
+
+    const firstName = document.getElementById("profile-first-name").value.trim();
+    const lastName = document.getElementById("profile-last-name").value.trim();
+    const status = document.getElementById("profile-status");
+    const button = document.getElementById("profile-submit");
+
+    if (!firstName || !lastName) {
+        status.textContent = "First name and last name are required.";
+        status.className = "status-text error";
+        return;
+    }
+
+    button.disabled = true;
+    status.textContent = "Saving profile...";
+    status.className = "status-text";
+
+    try {
+        const response = await authenticatedFetch("/api/profile", {
+            method: "PATCH",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({firstName, lastName})
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || "Unable to save profile.");
+        }
+
+        status.textContent = `Saved. Public notes will show ${data.profile.publicAuthor}.`;
+        status.className = "status-text success";
+        showProfilePanel(data.profile);
+    } catch (error) {
+        status.textContent = error.message || "Unable to save profile.";
+        status.className = "status-text error";
+    } finally {
+        button.disabled = false;
+    }
+}
+
 function setActiveView(view) {
     notesState.activeView = view;
     document.getElementById("my-notes-view").hidden = view !== "my-notes";
@@ -500,10 +572,7 @@ async function setPublished(noteId, published) {
             {
                 method: "PATCH",
                 headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({
-                    published,
-                    authorDisplayName: getPublicAuthorLabelFromSession()
-                })
+                body: JSON.stringify({published})
             }
         );
 
@@ -633,6 +702,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         showCreatePanel(true);
     });
     document.getElementById("cancel-note-btn").addEventListener("click", () => showCreatePanel(false));
+    document.getElementById("profile-form").addEventListener("submit", saveProfile);
     document.getElementById("create-note-form").addEventListener("submit", createNote);
     document.getElementById("note-upload-input").addEventListener("change", handleUploadSelection);
     document.getElementById("public-search-btn").addEventListener("click", loadPublicNotes);
@@ -645,5 +715,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     document.getElementById("close-public-note").addEventListener("click", loadPublicNotes);
 
-    if (isAuthenticated()) await loadNotes();
+    if (isAuthenticated()) {
+        try {
+            const profile = await loadProfile();
+            showProfilePanel(profile);
+        } catch (error) {
+            console.error("Unable to load profile:", error);
+        }
+
+        await loadNotes();
+    }
 });
