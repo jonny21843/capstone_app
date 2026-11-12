@@ -31,6 +31,13 @@ Resources:
           KeyType: HASH
         - AttributeName: noteId
           KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: NoteIdIndex
+          KeySchema:
+            - AttributeName: noteId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       SSESpecification:
@@ -74,6 +81,7 @@ Resources:
         AllowMethods:
           - GET
           - POST
+          - PATCH
           - OPTIONS
       Auth:
         Authorizers:
@@ -91,8 +99,7 @@ Resources:
       CodeUri: ../backend/functions/me/
       Handler: app.lambda_handler
       Runtime: python3.12
-      Architectures:
-        - x86_64
+      Architectures: [x86_64]
       MemorySize: 128
       Timeout: 5
       Events:
@@ -110,8 +117,7 @@ Resources:
       CodeUri: ../backend/functions/notes/create/
       Handler: app.lambda_handler
       Runtime: python3.12
-      Architectures:
-        - x86_64
+      Architectures: [x86_64]
       MemorySize: 128
       Timeout: 5
       Environment:
@@ -135,8 +141,7 @@ Resources:
       CodeUri: ../backend/functions/notes/list/
       Handler: app.lambda_handler
       Runtime: python3.12
-      Architectures:
-        - x86_64
+      Architectures: [x86_64]
       MemorySize: 128
       Timeout: 5
       Environment:
@@ -160,8 +165,7 @@ Resources:
       CodeUri: ../backend/functions/notes/upload/
       Handler: app.lambda_handler
       Runtime: python3.12
-      Architectures:
-        - x86_64
+      Architectures: [x86_64]
       MemorySize: 128
       Timeout: 5
       Environment:
@@ -181,6 +185,109 @@ Resources:
             Path: /api/notes/{noteId}/upload
             Method: POST
             PayloadFormatVersion: "2.0"
+
+  RegisterFileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/functions/notes/files/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures: [x86_64]
+      MemorySize: 128
+      Timeout: 5
+      Environment:
+        Variables:
+          NOTES_TABLE: !Ref NotesTable
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref NotesTable
+      Events:
+        RegisterFile:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotesApi
+            Path: /api/notes/{noteId}/files
+            Method: POST
+            PayloadFormatVersion: "2.0"
+
+  PublishNoteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/functions/notes/publish/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures: [x86_64]
+      MemorySize: 128
+      Timeout: 5
+      Environment:
+        Variables:
+          NOTES_TABLE: !Ref NotesTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref NotesTable
+      Events:
+        PublishNote:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotesApi
+            Path: /api/notes/{noteId}/publish
+            Method: PATCH
+            PayloadFormatVersion: "2.0"
+
+  PublicNotesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/functions/public/list/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures: [x86_64]
+      MemorySize: 128
+      Timeout: 5
+      Environment:
+        Variables:
+          NOTES_TABLE: !Ref NotesTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref NotesTable
+      Events:
+        PublicNotes:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotesApi
+            Path: /api/public/notes
+            Method: GET
+            PayloadFormatVersion: "2.0"
+            Auth:
+              Authorizer: NONE
+
+  PublicNoteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/functions/public/get/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures: [x86_64]
+      MemorySize: 128
+      Timeout: 5
+      Environment:
+        Variables:
+          NOTES_TABLE: !Ref NotesTable
+          NOTES_BUCKET: !Ref NotesBucket
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref NotesTable
+        - S3ReadPolicy:
+            BucketName: !Ref NotesBucket
+      Events:
+        PublicNote:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotesApi
+            Path: /api/public/notes/{noteId}
+            Method: GET
+            PayloadFormatVersion: "2.0"
+            Auth:
+              Authorizer: NONE
 
 Outputs:
   ApiBaseUrl:
