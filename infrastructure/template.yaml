@@ -11,6 +11,11 @@ Parameters:
     Type: String
     Default: 3t79knetd0pdav5jsso0osfb1e
 
+  AdminEmails:
+    Type: String
+    Default: jonathan.feagans@outlook.com
+    Description: Comma-separated administrator emails allowed to view app analytics.
+
   CloudFrontOrigin:
     Type: String
     Default: https://d84l1y8p4kdic.cloudfront.net
@@ -156,6 +161,38 @@ Resources:
             ApiId: !Ref NotesApi
             Path: /api/profile
             Method: PATCH
+            PayloadFormatVersion: "2.0"
+
+  AdminAnalyticsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/functions/admin/analytics/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures: [x86_64]
+      MemorySize: 128
+      Timeout: 10
+      Environment:
+        Variables:
+          NOTES_TABLE: !Ref NotesTable
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
+          ADMIN_EMAILS: !Ref AdminEmails
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref NotesTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+                - cognito-idp:ListUsers
+              Resource: !Sub "arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}"
+      Events:
+        GetAdminAnalytics:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotesApi
+            Path: /api/admin/analytics
+            Method: GET
             PayloadFormatVersion: "2.0"
 
   CreateNoteFunction:
