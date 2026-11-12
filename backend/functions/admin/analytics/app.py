@@ -39,25 +39,23 @@ def claims(event):
     )
 
 
-def username_from_event(event):
-    current = claims(event)
-    return current.get("username") or current.get("cognito:username")
-
-
 def current_user_email(event):
-    username = username_from_event(event)
-    if not username:
-        return None
+    current = claims(event)
 
-    user = cognito.admin_get_user(
-        UserPoolId=user_pool_id,
-        Username=username,
-    )
-    attributes = {
-        item["Name"]: item.get("Value", "")
-        for item in user.get("UserAttributes", [])
-    }
-    return (attributes.get("email") or "").strip().lower() or None
+    email = (current.get("email") or "").strip().lower()
+    if email:
+        return email
+
+    username = (
+        current.get("username")
+        or current.get("cognito:username")
+        or ""
+    ).strip()
+
+    if "@" in username:
+        return username.lower()
+
+    return None
 
 
 def is_admin(event):
@@ -68,32 +66,41 @@ def is_admin(event):
 def scan_all_notes():
     notes = []
     scan_args = {}
+
     while True:
         result = table.scan(**scan_args)
         notes.extend(result.get("Items", []))
+
         last_key = result.get("LastEvaluatedKey")
         if not last_key:
             break
+
         scan_args["ExclusiveStartKey"] = last_key
+
     return notes
 
 
 def count_users():
     total = 0
     pagination_token = None
+
     try:
         while True:
             args = {
                 "UserPoolId": user_pool_id,
                 "Limit": 60,
             }
+
             if pagination_token:
                 args["PaginationToken"] = pagination_token
+
             result = cognito.list_users(**args)
             total += len(result.get("Users", []))
             pagination_token = result.get("PaginationToken")
+
             if not pagination_token:
                 break
+
         return total, None
     except Exception as error:
         return None, f"{type(error).__name__}: {error}"
@@ -107,20 +114,18 @@ def top_values(counter, limit=8):
 
 
 def lambda_handler(event, context):
-    try:
-        if not is_admin(event):
-            return response(403, {"error": "Admin access required"})
-    except Exception as error:
+    params = event.get("queryStringParameters") or {}
+
+    if not is_admin(event):
         return response(
-            500,
+            403,
             {
-                "error": "Unable to verify admin access",
-                "detail": f"{type(error).__name__}: {error}",
+                "error": "Admin access required",
+                "emailClaimPresent": bool((claims(event).get("email") or "").strip()),
             },
         )
 
-    params = event.get("queryStringParameters") or {}
-    if (str(params.get("probe") or "").lower() in {"1", "true", "yes"}:
+    if str(params.get("probe") or "").lower() in {"1", "true", "yes"}:
         return response(200, {"isAdmin": True})
 
     try:
@@ -153,6 +158,7 @@ def lambda_handler(event, context):
         for file in files:
             if not isinstance(file, dict):
                 continue
+
             try:
                 total_storage_bytes += int(file.get("sizeBytes") or 0)
             except (TypeError, ValueError, ArithmeticError):
@@ -165,8 +171,10 @@ def lambda_handler(event, context):
 
         subject = str(note.get("subject") or "").strip()
         collection = str(note.get("collection") or "").strip()
+
         if subject:
             subjects[subject] += 1
+
         if collection:
             collections[collection] += 1
 
