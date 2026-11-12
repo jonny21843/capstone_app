@@ -40,9 +40,13 @@ def lambda_handler(event, context):
     title = (payload.get("title") or "").strip()
     subject = (payload.get("subject") or "").strip()
     collection = (payload.get("collection") or "").strip()
+    description = (payload.get("description") or "").strip()
 
     if not title:
         return response(400, {"error": "title is required"})
+
+    if len(description) > 1200:
+        return response(400, {"error": "description must be 1200 characters or fewer"})
 
     note_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -53,6 +57,8 @@ def lambda_handler(event, context):
         "title": title,
         "subject": subject,
         "collection": collection,
+        "description": description,
+        "files": [],
         "visibility": "private",
         "processingStatus": "created",
         "createdAt": now,
