@@ -444,6 +444,26 @@ function findUploadStatus(noteId) {
 async function uploadFileForNote(file, noteId) {
     const status = findUploadStatus(noteId);
     const contentType = file.type || "application/octet-stream";
+    const allowedTypes = new Set([
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+        "image/webp"
+    ]);
+    const maxFileBytes = 20 * 1024 * 1024;
+
+    if (!allowedTypes.has(contentType)) {
+        status.textContent = "Unsupported file type. Use PDF, JPG, PNG, or WEBP.";
+        status.className = "upload-status error";
+        return;
+    }
+
+    if (file.size > maxFileBytes) {
+        status.textContent = "File is too large. Maximum size is 20 MB.";
+        status.className = "upload-status error";
+        return;
+    }
+
     status.textContent = "Preparing upload...";
     status.className = "upload-status";
 
@@ -453,7 +473,11 @@ async function uploadFileForNote(file, noteId) {
             {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({filename: file.name, contentType})
+                body: JSON.stringify({
+                    filename: file.name,
+                    contentType,
+                    fileSize: file.size
+                })
             }
         );
 
@@ -597,6 +621,8 @@ async function loadPublicNotes() {
     const grid = document.getElementById("public-grid");
     const detail = document.getElementById("public-note-detail");
     const query = document.getElementById("public-search").value.trim();
+    const subject = document.getElementById("public-subject").value;
+    const sort = document.getElementById("public-sort").value;
 
     detail.hidden = true;
     grid.hidden = false;
@@ -606,12 +632,28 @@ async function loadPublicNotes() {
     try {
         const url = new URL(apiUrl("/api/public/notes"));
         if (query) url.searchParams.set("q", query);
+        if (subject) url.searchParams.set("subject", subject);
+        if (sort) url.searchParams.set("sort", sort);
 
         const response = await fetch(url);
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Unable to load public notes.");
 
         const notes = data.notes || [];
+        const subjectSelect = document.getElementById("public-subject");
+        const currentSubject = subjectSelect.value;
+
+        if (subjectSelect.options.length <= 1 || currentSubject === "") {
+            const options = ['<option value="">All subjects</option>']
+                .concat(
+                    (data.subjects || []).map(
+                        (item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`
+                    )
+                );
+            subjectSelect.innerHTML = options.join("");
+            subjectSelect.value = currentSubject;
+        }
+
         document.getElementById("public-status").hidden = true;
 
         if (!notes.length) {
@@ -708,8 +750,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("public-search-btn").addEventListener("click", loadPublicNotes);
     document.getElementById("public-search-clear").addEventListener("click", () => {
         document.getElementById("public-search").value = "";
+        document.getElementById("public-subject").value = "";
+        document.getElementById("public-sort").value = "newest";
         loadPublicNotes();
     });
+    document.getElementById("public-subject").addEventListener("change", loadPublicNotes);
+    document.getElementById("public-sort").addEventListener("change", loadPublicNotes);
     document.getElementById("public-search").addEventListener("keydown", (event) => {
         if (event.key === "Enter") loadPublicNotes();
     });
