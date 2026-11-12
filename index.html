@@ -9,6 +9,12 @@
 
 <h1>Welcome to Feagans Capstone Project</h1>
 
+<div class="auth-bar">
+    <span id="auth-status">Not signed in</span>
+    <button id="sign-in-btn" class="primary-btn">Sign In</button>
+    <button id="sign-out-btn" class="primary-btn" hidden>Sign Out</button>
+</div>
+
 <div class="tabs">
     <button class="tab-button" data-tab="upload"><span>📤</span> Upload</button>
     <button class="tab-button" data-tab="view"><span>📁</span> View Files</button>
@@ -44,10 +50,10 @@
         <div class="upload-status-row">
             <span id="upload-status-icon" class="status-icon"></span>
             <span id="upload-status"></span>
-            </div>
-            <div class="upload-progress">
+        </div>
+        <div class="upload-progress">
             <div id="upload-progress-bar" class="upload-progress-bar"></div>
-            </div>
+        </div>
 
     </div>
 </section>
@@ -107,6 +113,7 @@
 </section>
 
 <script src="config.js"></script>
+<script src="auth.js"></script>
 <script src="tabs.js"></script>
 <script src="upload.js"></script>
 <script src="view.js"></script>
