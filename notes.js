@@ -936,7 +936,8 @@ async function loadAdminAnalytics() {
             return;
         }
         if (!response.ok) {
-            throw new Error(data.error || `Unable to load analytics (HTTP ${response.status}).`);
+            const detail = data.detail ? ` — ${data.detail}` : "";
+            throw new Error((data.error || `Unable to load analytics (HTTP ${response.status}).`) + detail);
         }
 
         const metrics = data.metrics || {};
@@ -948,6 +949,13 @@ async function loadAdminAnalytics() {
         document.getElementById("metric-storage").textContent = formatBytes(metrics.storageBytes || 0) || "0 B";
         document.getElementById("metric-views").textContent = Number(metrics.views || 0);
         document.getElementById("metric-average-files").textContent = Number(metrics.averageFilesPerNote || 0).toFixed(2);
+
+        const warnings = data.warnings || [];
+        if (warnings.length) {
+            status.hidden = false;
+            status.textContent = warnings.map((warning) => warning.message).join(" ");
+            status.style.color = "#b54708";
+        }
 
         renderAnalyticsList("analytics-subjects", data.topSubjects || [], "No subjects yet.");
         renderAnalyticsList("analytics-collections", data.topCollections || [], "No collections yet.");
@@ -971,7 +979,9 @@ async function loadAdminAnalytics() {
             `).join("");
         }
 
-        status.hidden = true;
+        if (!(data.warnings || []).length) {
+            status.hidden = true;
+        }
         content.hidden = false;
     } catch (error) {
         status.textContent = error.message || "Unable to load analytics.";
