@@ -16,6 +16,16 @@ function apiUrl(path) {
     return `${getApiBaseUrl()}${path}`;
 }
 
+async function adminFetch(path, options = {}) {
+    const token = sessionStorage.getItem("id_token");
+    if (!token) throw new Error("Please sign in first.");
+
+    const headers = new Headers(options.headers || {});
+    headers.set("Authorization", `Bearer ${token}`);
+
+    return fetch(apiUrl(path), { ...options, headers });
+}
+
 async function authenticatedFetch(path, options = {}) {
     const token = getAccessToken();
     if (!token) throw new Error("Please sign in first.");
@@ -879,7 +889,7 @@ async function probeAdminAccess() {
     if (!isAuthenticated()) return false;
 
     try {
-        const response = await authenticatedFetch("/api/admin/analytics?probe=1");
+        const response = await adminFetch("/api/admin/analytics?probe=1");
         if (response.status === 403) {
             notesState.isAdmin = false;
             document.getElementById("analytics-tab").hidden = true;
@@ -921,7 +931,7 @@ async function loadAdminAnalytics() {
     content.hidden = true;
 
     try {
-        const response = await authenticatedFetch("/api/admin/analytics");
+        const response = await adminFetch("/api/admin/analytics");
         let data = {};
         try {
             data = await response.json();
