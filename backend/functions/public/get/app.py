@@ -3,11 +3,19 @@ import os
 
 import boto3
 from boto3.dynamodb.conditions import Key
+from botocore.config import Config
 
 
 table = boto3.resource("dynamodb").Table(os.environ["NOTES_TABLE"])
-s3 = boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-east-2"))
 bucket_name = os.environ["NOTES_BUCKET"]
+aws_region = os.environ.get("AWS_REGION", "us-east-2")
+
+s3 = boto3.client(
+    "s3",
+    region_name=aws_region,
+    endpoint_url=f"https://s3.{aws_region}.amazonaws.com",
+    config=Config(signature_version="s3v4"),
+)
 
 
 def response(status_code, body):
