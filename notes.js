@@ -502,7 +502,7 @@ async function setPublished(noteId, published) {
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({
                     published,
-                    authorDisplayName: getPublicAuthorLabel()
+                    authorDisplayName: getPublicAuthorLabelFromSession()
                 })
             }
         );
