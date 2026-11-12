@@ -7,6 +7,7 @@ const notesState = {
     replaceFileId: null,
     publicPage: 1,
     publicTotalPages: 1,
+    publicPageSize: 18,
     profile: null,
     uploadFeedback: {},
     isAdmin: false
@@ -1018,6 +1019,27 @@ function setPublicStatus(message, isError = false) {
     status.style.color = isError ? "#b42318" : "";
 }
 
+function renderActivePublicFilters(query, subject, collection, sort) {
+    const container = document.getElementById("public-active-filters");
+    const items = [];
+
+    if (query) items.push(`Search: ${query}`);
+    if (subject) items.push(`Subject: ${subject}`);
+    if (collection) items.push(`Collection: ${collection}`);
+    if (sort && sort !== "newest") {
+        const labels = {
+            oldest: "Oldest",
+            title: "Title A–Z",
+            views: "Most viewed"
+        };
+        items.push(`Sort: ${labels[sort] || sort}`);
+    }
+
+    container.innerHTML = items.length
+        ? items.map((item) => `<span class="active-filter-chip">${escapeHtml(item)}</span>`).join("")
+        : '<span class="active-filter-empty">No filters applied</span>';
+}
+
 async function loadPublicNotes() {
     const grid = document.getElementById("public-grid");
     const detail = document.getElementById("public-note-detail");
@@ -1025,6 +1047,8 @@ async function loadPublicNotes() {
     const subject = document.getElementById("public-subject").value;
     const collection = document.getElementById("public-collection").value;
     const sort = document.getElementById("public-sort").value;
+    const pageSize = Number(document.getElementById("public-page-size").value || notesState.publicPageSize || 18);
+    notesState.publicPageSize = pageSize;
 
     detail.hidden = true;
     grid.hidden = false;
@@ -1038,7 +1062,7 @@ async function loadPublicNotes() {
         if (collection) url.searchParams.set("collection", collection);
         if (sort) url.searchParams.set("sort", sort);
         url.searchParams.set("page", String(notesState.publicPage));
-        url.searchParams.set("pageSize", "12");
+        url.searchParams.set("pageSize", String(pageSize));
 
         const response = await fetch(url);
         const data = await response.json();
@@ -1076,10 +1100,22 @@ async function loadPublicNotes() {
         notesState.publicTotalPages = data.totalPages || 1;
         const pagination = document.getElementById("public-pagination");
         const pageLabel = document.getElementById("public-page-label");
+        const total = Number(data.total || 0);
+        const startItem = total ? ((notesState.publicPage - 1) * pageSize) + 1 : 0;
+        const endItem = total ? Math.min(notesState.publicPage * pageSize, total) : 0;
+
         pagination.hidden = (data.totalPages || 1) <= 1;
-        pageLabel.textContent = `Page ${notesState.publicPage} of ${notesState.publicTotalPages} · ${data.total || 0} notes`;
+        pageLabel.textContent = `Page ${notesState.publicPage} of ${notesState.publicTotalPages}`;
+        document.getElementById("public-result-summary").textContent =
+            total === 1 ? "1 public note" : `${total.toLocaleString()} public notes`;
+        document.getElementById("public-page-summary").textContent =
+            total ? `Showing ${startItem.toLocaleString()}–${endItem.toLocaleString()}` : "No matching notes";
+        renderActivePublicFilters(query, subject, collection, sort);
+
+        document.getElementById("public-first-page").disabled = notesState.publicPage <= 1;
         document.getElementById("public-prev-page").disabled = notesState.publicPage <= 1;
         document.getElementById("public-next-page").disabled = notesState.publicPage >= notesState.publicTotalPages;
+        document.getElementById("public-last-page").disabled = notesState.publicPage >= notesState.publicTotalPages;
 
         document.getElementById("public-status").hidden = true;
 
@@ -1095,26 +1131,46 @@ async function loadPublicNotes() {
 
         notes.forEach((note) => {
             const card = document.createElement("article");
-            card.className = "note-card";
-            const meta = [note.subject, note.collection].filter(Boolean);
+            card.className = "public-note-card";
+            card.tabIndex = 0;
+            card.setAttribute("role", "button");
+            card.setAttribute("aria-label", `Open ${note.title || "public note"}`);
+
+            const subjectLabel = note.subject || "General";
+            const collectionLabel = note.collection || "";
+            const fileCount = Number(note.fileCount || 0);
+            const viewCount = Number(note.viewCount || 0);
+
             card.innerHTML = `
-                <span class="badge">Public</span>
-                <h3>${escapeHtml(note.title)}</h3>
-                <div class="note-meta">
-                    ${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("<span>·</span>")}
-                </div>
-                <p class="note-description">${escapeHtml(note.description || "")}</p>
-                <div class="note-meta">
-                    <span>Posted by ${escapeHtml(note.publicAuthor || "Community member")}</span>
-                    <span>·</span>
-                    <span>${Number(note.viewCount || 0)} views</span>
-                </div>
-                <div class="note-card-footer">
+                <div class="public-note-card-top">
+                    <span class="subject-chip">${escapeHtml(subjectLabel)}</span>
                     <span class="note-date">${escapeHtml(formatDate(note.publishedAt))}</span>
-                    <button class="button button-primary" type="button">View Note</button>
+                </div>
+
+                <div class="public-note-card-body">
+                    <h3>${escapeHtml(note.title || "Untitled note")}</h3>
+                    ${collectionLabel ? `<p class="public-note-collection">${escapeHtml(collectionLabel)}</p>` : ""}
+                    <p class="public-note-description">${escapeHtml(note.description || "No description provided.")}</p>
+                </div>
+
+                <div class="public-note-card-footer">
+                    <span>By ${escapeHtml(note.publicAuthor || "Community member")}</span>
+                    <div class="public-note-stats">
+                        <span>${fileCount} file${fileCount === 1 ? "" : "s"}</span>
+                        <span>${viewCount.toLocaleString()} view${viewCount === 1 ? "" : "s"}</span>
+                    </div>
                 </div>
             `;
-            card.querySelector("button").addEventListener("click", () => openPublicNote(note.noteId));
+
+            const openCard = () => openPublicNote(note.noteId);
+            card.addEventListener("click", openCard);
+            card.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openCard();
+                }
+            });
+
             grid.appendChild(card);
         });
     } catch (error) {
@@ -1229,6 +1285,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.getElementById("public-subject").value = "";
         document.getElementById("public-collection").value = "";
         document.getElementById("public-sort").value = "newest";
+        document.getElementById("public-page-size").value = "18";
+        notesState.publicPageSize = 18;
         notesState.publicPage = 1;
         loadPublicNotes();
     });
@@ -1244,6 +1302,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         notesState.publicPage = 1;
         loadPublicNotes();
     });
+    document.getElementById("public-page-size").addEventListener("change", () => {
+        notesState.publicPage = 1;
+        notesState.publicPageSize = Number(document.getElementById("public-page-size").value || 18);
+        loadPublicNotes();
+    });
+    document.getElementById("public-first-page").addEventListener("click", () => {
+        if (notesState.publicPage > 1) {
+            notesState.publicPage = 1;
+            loadPublicNotes();
+        }
+    });
     document.getElementById("public-prev-page").addEventListener("click", () => {
         if (notesState.publicPage > 1) {
             notesState.publicPage -= 1;
@@ -1253,6 +1322,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("public-next-page").addEventListener("click", () => {
         if (notesState.publicPage < notesState.publicTotalPages) {
             notesState.publicPage += 1;
+            loadPublicNotes();
+        }
+    });
+    document.getElementById("public-last-page").addEventListener("click", () => {
+        if (notesState.publicPage < notesState.publicTotalPages) {
+            notesState.publicPage = notesState.publicTotalPages;
             loadPublicNotes();
         }
     });
