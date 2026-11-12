@@ -183,10 +183,6 @@ Resources:
         - Statement:
             - Effect: Allow
               Action:
-                - cognito-idp:AdminGetUser
-              Resource: !Sub "arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}"
-            - Effect: Allow
-              Action:
                 - cognito-idp:ListUsers
               Resource: "*"
       Events:
