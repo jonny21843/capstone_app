@@ -982,7 +982,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("settings-profile-form").addEventListener("submit", saveSettingsProfile);
     document.getElementById("create-note-form").addEventListener("submit", createNote);
     document.getElementById("note-upload-input").addEventListener("change", handleUploadSelection);
-    document.getElementById("public-search-btn").addEventListener("click", loadPublicNotes);
+    document.getElementById("public-search-btn").addEventListener("click", () => {
+        notesState.publicPage = 1;
+        loadPublicNotes();
+    });
     document.getElementById("public-search-clear").addEventListener("click", () => {
         document.getElementById("public-search").value = "";
         document.getElementById("public-subject").value = "";
@@ -1016,7 +1019,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
     document.getElementById("public-search").addEventListener("keydown", (event) => {
-        if (event.key === "Enter") loadPublicNotes();
+        if (event.key === "Enter") {
+            notesState.publicPage = 1;
+            loadPublicNotes();
+        }
     });
     document.getElementById("close-public-note").addEventListener("click", () => {
         const url = new URL(window.location.href);
