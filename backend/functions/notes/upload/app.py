@@ -76,19 +76,25 @@ def lambda_handler(event, context):
     if not note:
         return response(404, {"error": "Note not found"})
 
-    if len(note.get("files") or []) >= max_files_per_note:
-        return response(
-            400,
-            {"error": f"A note can have at most {max_files_per_note} source files"},
-        )
-
     try:
         payload = json.loads(event.get("body") or "{}")
     except json.JSONDecodeError:
         return response(400, {"error": "Request body must be valid JSON"})
 
     raw_filename = (payload.get("filename") or "").strip()
+    replace_file_id = (payload.get("replaceFileId") or "").strip()
     filename = safe_filename(raw_filename)
+
+    files = note.get("files") or []
+    replacing = bool(replace_file_id and any(item.get("fileId") == replace_file_id for item in files))
+    if len(files) >= max_files_per_note and not replacing:
+        return response(
+            400,
+            {"error": f"A note can have at most {max_files_per_note} source files"},
+        )
+
+    if replace_file_id and not replacing:
+        return response(404, {"error": "Source file to replace was not found"})
     content_type = (payload.get("contentType") or "").strip().lower()
 
     try:
@@ -141,5 +147,6 @@ def lambda_handler(event, context):
             "key": key,
             "expiresIn": 300,
             "maxFileBytes": max_file_bytes,
+            "replaceFileId": replace_file_id or None,
         },
     )
