@@ -57,15 +57,24 @@ def lambda_handler(event, context):
 
     try:
         page = max(1, int(params.get("page") or 1))
-        page_size = min(24, max(1, int(params.get("pageSize") or 12)))
+        page_size = min(48, max(1, int(params.get("pageSize") or 18)))
     except ValueError:
         return response(400, {"error": "page and pageSize must be numbers"})
 
-    result = table.scan(
-        FilterExpression=Attr("visibility").eq("public"),
-        Limit=500,
-    )
-    all_public = result.get("Items", [])
+    all_public = []
+    scan_args = {
+        "FilterExpression": Attr("visibility").eq("public"),
+    }
+
+    while True:
+        result = table.scan(**scan_args)
+        all_public.extend(result.get("Items", []))
+
+        last_key = result.get("LastEvaluatedKey")
+        if not last_key:
+            break
+
+        scan_args["ExclusiveStartKey"] = last_key
 
     subjects = sorted(
         {
