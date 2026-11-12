@@ -120,20 +120,24 @@ def lambda_handler(event, context):
     object_id = str(uuid.uuid4())
     key = f"users/{user_id}/notes/{note_id}/original/{object_id}-{filename}"
 
-    upload_url = s3.generate_presigned_url(
-        "put_object",
-        Params={
-            "Bucket": bucket_name,
-            "Key": key,
-            "ContentType": content_type,
+    upload = s3.generate_presigned_post(
+        Bucket=bucket_name,
+        Key=key,
+        Fields={
+            "Content-Type": content_type,
         },
+        Conditions=[
+            {"Content-Type": content_type},
+            ["content-length-range", 1, max_file_bytes],
+        ],
         ExpiresIn=300,
     )
 
     return response(
         200,
         {
-            "uploadUrl": upload_url,
+            "uploadUrl": upload["url"],
+            "uploadFields": upload["fields"],
             "key": key,
             "expiresIn": 300,
             "maxFileBytes": max_file_bytes,
