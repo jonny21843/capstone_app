@@ -184,8 +184,11 @@ Resources:
             - Effect: Allow
               Action:
                 - cognito-idp:AdminGetUser
-                - cognito-idp:ListUsers
               Resource: !Sub "arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}"
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+              Resource: "*"
       Events:
         GetAdminAnalytics:
           Type: HttpApi
