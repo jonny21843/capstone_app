@@ -3,7 +3,11 @@ const notesState = {
     uploadNoteId: null,
     editingNoteId: null,
     activeView: "my-notes",
-    uploadInProgress: false
+    uploadInProgress: false,
+    replaceFileId: null,
+    publicPage: 1,
+    publicTotalPages: 1,
+    profile: null
 };
 
 function apiUrl(path) {
@@ -45,18 +49,28 @@ async function loadProfile() {
 }
 
 function showProfilePanel(profile) {
+    notesState.profile = profile || null;
     const panel = document.getElementById("profile-panel");
 
-    if (!panel) {
-        return;
+    if (panel) {
+        const complete = Boolean(profile?.complete);
+        panel.hidden = complete;
+
+        if (!complete) {
+            document.getElementById("profile-first-name").value = profile?.firstName || "";
+            document.getElementById("profile-last-name").value = profile?.lastName || "";
+        }
     }
 
-    const complete = Boolean(profile?.complete);
-    panel.hidden = complete;
-
-    if (!complete) {
-        document.getElementById("profile-first-name").value = profile?.firstName || "";
-        document.getElementById("profile-last-name").value = profile?.lastName || "";
+    const settingsFirst = document.getElementById("settings-first-name");
+    const settingsLast = document.getElementById("settings-last-name");
+    const preview = document.getElementById("settings-public-preview");
+    if (settingsFirst) settingsFirst.value = profile?.firstName || "";
+    if (settingsLast) settingsLast.value = profile?.lastName || "";
+    if (preview) {
+        preview.textContent = profile?.publicAuthor
+            ? `Public notes currently show: ${profile.publicAuthor}`
+            : "Complete your profile before publishing.";
     }
 }
 
@@ -101,12 +115,49 @@ async function saveProfile(event) {
     }
 }
 
+async function saveSettingsProfile(event) {
+    event.preventDefault();
+    const firstName = document.getElementById("settings-first-name").value.trim();
+    const lastName = document.getElementById("settings-last-name").value.trim();
+    const status = document.getElementById("settings-profile-status");
+    const button = document.getElementById("settings-profile-submit");
+
+    if (!firstName || !lastName) {
+        status.textContent = "First name and last name are required.";
+        status.className = "status-text error";
+        return;
+    }
+
+    button.disabled = true;
+    status.textContent = "Saving profile...";
+    status.className = "status-text";
+    try {
+        const response = await authenticatedFetch("/api/profile", {
+            method: "PATCH",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({firstName, lastName})
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Unable to save profile.");
+        showProfilePanel(data.profile);
+        status.textContent = `Saved. Public notes will show ${data.profile.publicAuthor}.`;
+        status.className = "status-text success";
+    } catch (error) {
+        status.textContent = error.message || "Unable to save profile.";
+        status.className = "status-text error";
+    } finally {
+        button.disabled = false;
+    }
+}
+
 function setActiveView(view) {
     notesState.activeView = view;
     document.getElementById("my-notes-view").hidden = view !== "my-notes";
     document.getElementById("explore-view").hidden = view !== "explore";
+    document.getElementById("settings-view").hidden = view !== "settings";
     document.getElementById("my-notes-tab").classList.toggle("active", view === "my-notes");
     document.getElementById("explore-tab").classList.toggle("active", view === "explore");
+    document.getElementById("settings-tab").classList.toggle("active", view === "settings");
 
     if (view === "explore") {
         loadPublicNotes();
@@ -118,12 +169,14 @@ function renderSignedInState() {
     const signedOutPanel = document.getElementById("signed-out-panel");
     const notesApp = document.getElementById("notes-app");
     const myNotesTab = document.getElementById("my-notes-tab");
+    const settingsTab = document.getElementById("settings-tab");
 
     signedOutPanel.hidden = signedIn;
     notesApp.hidden = !signedIn;
     myNotesTab.hidden = !signedIn;
+    settingsTab.hidden = !signedIn;
 
-    if (!signedIn && notesState.activeView === "my-notes") {
+    if (!signedIn && (notesState.activeView === "my-notes" || notesState.activeView === "settings")) {
         setActiveView("explore");
     }
 }
@@ -158,6 +211,13 @@ function setCreateStatus(message, type = "") {
     const element = document.getElementById("create-note-status");
     element.textContent = message || "";
     element.className = `status-text ${type}`.trim();
+}
+
+function formatBytes(value) {
+    const bytes = Number(value || 0);
+    if (!bytes) return "";
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function formatDate(value) {
@@ -290,17 +350,19 @@ function renderNotes() {
                 <div class="owner-source-list">
                     ${files.map((file) => `
                         <div class="owner-source-row">
-                            <span title="${escapeHtml(file.filename || "Source file")}">
-                                ${escapeHtml(file.filename || "Source file")}
-                            </span>
-                            <button
-                                class="button button-danger-text"
-                                type="button"
-                                data-remove-source
-                                data-file-id="${escapeHtml(file.fileId || "")}"
-                            >
-                                Remove
-                            </button>
+                            <div class="owner-source-info">
+                                <span title="${escapeHtml(file.filename || "Source file")}">
+                                    ${escapeHtml(file.filename || "Source file")}
+                                </span>
+                                <small>${escapeHtml(formatBytes(file.sizeBytes))}</small>
+                            </div>
+                            <div class="source-actions">
+                                <button class="button button-mini" type="button" data-move-source="up" data-file-id="${escapeHtml(file.fileId || "")}" title="Move up">↑</button>
+                                <button class="button button-mini" type="button" data-move-source="down" data-file-id="${escapeHtml(file.fileId || "")}" title="Move down">↓</button>
+                                <button class="button button-mini" type="button" data-rename-source data-file-id="${escapeHtml(file.fileId || "")}">Rename</button>
+                                <button class="button button-mini" type="button" data-replace-source data-file-id="${escapeHtml(file.fileId || "")}">Replace</button>
+                                <button class="button button-danger-text" type="button" data-remove-source data-file-id="${escapeHtml(file.fileId || "")}">Remove</button>
+                            </div>
                         </div>
                     `).join("")}
                 </div>
@@ -334,6 +396,28 @@ function renderNotes() {
             startEditNote(note);
         });
 
+        card.querySelectorAll("[data-rename-source]").forEach((button) => {
+            button.addEventListener("click", () => renameSourceFile(note, button.dataset.fileId));
+        });
+
+        card.querySelectorAll("[data-move-source]").forEach((button) => {
+            button.addEventListener("click", () => moveSourceFile(note, button.dataset.fileId, button.dataset.moveSource));
+        });
+
+        card.querySelectorAll("[data-replace-source]").forEach((button) => {
+            button.addEventListener("click", () => {
+                if (notesState.uploadInProgress) {
+                    alert("Please wait for the current upload to finish.");
+                    return;
+                }
+                notesState.uploadNoteId = note.noteId;
+                notesState.replaceFileId = button.dataset.fileId || null;
+                const input = document.getElementById("note-upload-input");
+                input.value = "";
+                input.click();
+            });
+        });
+
         card.querySelectorAll("[data-remove-source]").forEach((button) => {
             button.addEventListener("click", () => {
                 const fileId = button.dataset.fileId;
@@ -355,6 +439,7 @@ function renderNotes() {
             }
 
             notesState.uploadNoteId = note.noteId;
+            notesState.replaceFileId = null;
             const input = document.getElementById("note-upload-input");
             input.value = "";
             input.click();
@@ -457,7 +542,7 @@ function findUploadStatus(noteId) {
         ?.querySelector("[data-upload-status]") || null;
 }
 
-async function uploadFileForNote(file, noteId) {
+async function uploadFileForNote(file, noteId, replaceFileId = null) {
     const status = findUploadStatus(noteId);
     const contentType = file.type || "application/octet-stream";
     const allowedTypes = new Set([
@@ -494,7 +579,8 @@ async function uploadFileForNote(file, noteId) {
                 body: JSON.stringify({
                     filename: file.name,
                     contentType,
-                    fileSize: file.size
+                    fileSize: file.size,
+                    replaceFileId
                 })
             }
         );
@@ -531,7 +617,8 @@ async function uploadFileForNote(file, noteId) {
                 body: JSON.stringify({
                     key: presign.key,
                     filename: file.name,
-                    contentType
+                    contentType,
+                    replaceFileId
                 })
             }
         );
@@ -539,7 +626,7 @@ async function uploadFileForNote(file, noteId) {
         const registered = await registerResponse.json();
         if (!registerResponse.ok) throw new Error(registered.error || "Uploaded, but could not register file.");
 
-        status.textContent = "Uploaded successfully";
+        status.textContent = replaceFileId ? "Replaced successfully" : "Uploaded successfully";
         status.className = "upload-status success";
         await loadNotes();
     } catch (error) {
@@ -552,6 +639,7 @@ async function uploadFileForNote(file, noteId) {
 async function handleUploadSelection(event) {
     const file = event.target.files?.[0];
     const noteId = notesState.uploadNoteId;
+    const replaceFileId = notesState.replaceFileId;
     if (!file || !noteId) return;
 
     if (notesState.uploadInProgress) {
@@ -563,12 +651,48 @@ async function handleUploadSelection(event) {
     renderNotes();
 
     try {
-        await uploadFileForNote(file, noteId);
+        await uploadFileForNote(file, noteId, replaceFileId);
     } finally {
         notesState.uploadInProgress = false;
         notesState.uploadNoteId = null;
+        notesState.replaceFileId = null;
         renderNotes();
     }
+}
+
+async function updateSourceFile(note, fileId, payload) {
+    try {
+        const response = await authenticatedFetch(
+            `/api/notes/${encodeURIComponent(note.noteId)}/files/${encodeURIComponent(fileId)}`,
+            {
+                method: "PATCH",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(payload)
+            }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Unable to update source file.");
+        await loadNotes();
+    } catch (error) {
+        alert(error.message || "Unable to update source file.");
+    }
+}
+
+async function renameSourceFile(note, fileId) {
+    const file = (note.files || []).find((item) => item.fileId === fileId);
+    if (!file) return;
+    const filename = window.prompt("Rename source file:", file.filename || "");
+    if (filename === null) return;
+    const trimmed = filename.trim();
+    if (!trimmed) {
+        alert("Filename cannot be empty.");
+        return;
+    }
+    await updateSourceFile(note, fileId, {action: "rename", filename: trimmed});
+}
+
+async function moveSourceFile(note, fileId, direction) {
+    await updateSourceFile(note, fileId, {action: "move", direction});
 }
 
 async function deleteSourceFile(note, fileId) {
@@ -663,6 +787,7 @@ async function loadPublicNotes() {
     const detail = document.getElementById("public-note-detail");
     const query = document.getElementById("public-search").value.trim();
     const subject = document.getElementById("public-subject").value;
+    const collection = document.getElementById("public-collection").value;
     const sort = document.getElementById("public-sort").value;
 
     detail.hidden = true;
@@ -674,7 +799,10 @@ async function loadPublicNotes() {
         const url = new URL(apiUrl("/api/public/notes"));
         if (query) url.searchParams.set("q", query);
         if (subject) url.searchParams.set("subject", subject);
+        if (collection) url.searchParams.set("collection", collection);
         if (sort) url.searchParams.set("sort", sort);
+        url.searchParams.set("page", String(notesState.publicPage));
+        url.searchParams.set("pageSize", "12");
 
         const response = await fetch(url);
         const data = await response.json();
@@ -683,6 +811,8 @@ async function loadPublicNotes() {
         const notes = data.notes || [];
         const subjectSelect = document.getElementById("public-subject");
         const currentSubject = subjectSelect.value;
+        const collectionSelect = document.getElementById("public-collection");
+        const currentCollection = collectionSelect.value;
 
         if (subjectSelect.options.length <= 1 || currentSubject === "") {
             const options = ['<option value="">All subjects</option>']
@@ -694,6 +824,26 @@ async function loadPublicNotes() {
             subjectSelect.innerHTML = options.join("");
             subjectSelect.value = currentSubject;
         }
+
+        if (collectionSelect.options.length <= 1 || currentCollection === "") {
+            const collectionOptions = ['<option value="">All collections</option>']
+                .concat(
+                    (data.collections || []).map(
+                        (item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`
+                    )
+                );
+            collectionSelect.innerHTML = collectionOptions.join("");
+            collectionSelect.value = currentCollection;
+        }
+
+        notesState.publicPage = data.page || 1;
+        notesState.publicTotalPages = data.totalPages || 1;
+        const pagination = document.getElementById("public-pagination");
+        const pageLabel = document.getElementById("public-page-label");
+        pagination.hidden = (data.totalPages || 1) <= 1;
+        pageLabel.textContent = `Page ${notesState.publicPage} of ${notesState.publicTotalPages} · ${data.total || 0} notes`;
+        document.getElementById("public-prev-page").disabled = notesState.publicPage <= 1;
+        document.getElementById("public-next-page").disabled = notesState.publicPage >= notesState.publicTotalPages;
 
         document.getElementById("public-status").hidden = true;
 
@@ -718,7 +868,11 @@ async function loadPublicNotes() {
                     ${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("<span>·</span>")}
                 </div>
                 <p class="note-description">${escapeHtml(note.description || "")}</p>
-                <div class="note-meta"><span>Posted by ${escapeHtml(note.publicAuthor || "Community member")}</span></div>
+                <div class="note-meta">
+                    <span>Posted by ${escapeHtml(note.publicAuthor || "Community member")}</span>
+                    <span>·</span>
+                    <span>${Number(note.viewCount || 0)} views</span>
+                </div>
                 <div class="note-card-footer">
                     <span class="note-date">${escapeHtml(formatDate(note.publishedAt))}</span>
                     <button class="button button-primary" type="button">View Note</button>
@@ -733,7 +887,25 @@ async function loadPublicNotes() {
     }
 }
 
-async function openPublicNote(noteId) {
+function publicNoteShareUrl(noteId) {
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.hash = "";
+    url.searchParams.set("note", noteId);
+    return url.toString();
+}
+
+async function sharePublicNote(noteId) {
+    const url = publicNoteShareUrl(noteId);
+    try {
+        await navigator.clipboard.writeText(url);
+        alert("Share link copied.");
+    } catch {
+        window.prompt("Copy this note link:", url);
+    }
+}
+
+async function openPublicNote(noteId, updateUrl = true) {
     const grid = document.getElementById("public-grid");
     const detail = document.getElementById("public-note-detail");
     const content = document.getElementById("public-note-content");
@@ -746,6 +918,12 @@ async function openPublicNote(noteId) {
         const note = data.note;
         const files = note.files || [];
 
+        if (updateUrl) {
+            const url = new URL(window.location.href);
+            url.searchParams.set("note", noteId);
+            window.history.replaceState({}, "", url);
+        }
+
         content.innerHTML = `
             <p class="eyebrow">Published note</p>
             <h2>${escapeHtml(note.title)}</h2>
@@ -753,7 +931,14 @@ async function openPublicNote(noteId) {
                 ${[note.subject, note.collection].filter(Boolean).map((item) => `<span>${escapeHtml(item)}</span>`).join("<span>·</span>")}
             </div>
             <p class="note-description">${escapeHtml(note.description || "")}</p>
-            <div class="note-meta"><span>Posted by ${escapeHtml(note.publicAuthor || "Community member")}</span></div>
+            <div class="note-meta">
+                <span>Posted by ${escapeHtml(note.publicAuthor || "Community member")}</span>
+                <span>·</span>
+                <span>${Number(note.viewCount || 0)} views</span>
+            </div>
+            <div class="public-detail-actions">
+                <button id="share-public-note" class="button button-secondary" type="button">Copy Share Link</button>
+            </div>
             <h3>Source notes</h3>
             <div class="source-viewer-list">
                 ${files.length
@@ -765,6 +950,7 @@ async function openPublicNote(noteId) {
         grid.hidden = true;
         document.getElementById("public-status").hidden = true;
         detail.hidden = false;
+        document.getElementById("share-public-note")?.addEventListener("click", () => sharePublicNote(noteId));
     } catch (error) {
         setPublicStatus(error.message || "Unable to open note.", true);
     }
@@ -775,7 +961,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     document.getElementById("hero-sign-in-btn").addEventListener("click", signIn);
     document.getElementById("my-notes-tab").addEventListener("click", () => setActiveView("my-notes"));
-    document.getElementById("explore-tab").addEventListener("click", () => setActiveView("explore"));
+    document.getElementById("explore-tab").addEventListener("click", () => {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("note");
+        window.history.replaceState({}, "", url);
+        notesState.publicPage = 1;
+        setActiveView("explore");
+    });
+    document.getElementById("settings-tab").addEventListener("click", () => setActiveView("settings"));
     document.getElementById("new-note-btn").addEventListener("click", () => {
         notesState.editingNoteId = null;
         document.getElementById("create-note-form").reset();
@@ -786,21 +979,51 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     document.getElementById("cancel-note-btn").addEventListener("click", () => showCreatePanel(false));
     document.getElementById("profile-form").addEventListener("submit", saveProfile);
+    document.getElementById("settings-profile-form").addEventListener("submit", saveSettingsProfile);
     document.getElementById("create-note-form").addEventListener("submit", createNote);
     document.getElementById("note-upload-input").addEventListener("change", handleUploadSelection);
     document.getElementById("public-search-btn").addEventListener("click", loadPublicNotes);
     document.getElementById("public-search-clear").addEventListener("click", () => {
         document.getElementById("public-search").value = "";
         document.getElementById("public-subject").value = "";
+        document.getElementById("public-collection").value = "";
         document.getElementById("public-sort").value = "newest";
+        notesState.publicPage = 1;
         loadPublicNotes();
     });
-    document.getElementById("public-subject").addEventListener("change", loadPublicNotes);
-    document.getElementById("public-sort").addEventListener("change", loadPublicNotes);
+    document.getElementById("public-subject").addEventListener("change", () => {
+        notesState.publicPage = 1;
+        loadPublicNotes();
+    });
+    document.getElementById("public-collection").addEventListener("change", () => {
+        notesState.publicPage = 1;
+        loadPublicNotes();
+    });
+    document.getElementById("public-sort").addEventListener("change", () => {
+        notesState.publicPage = 1;
+        loadPublicNotes();
+    });
+    document.getElementById("public-prev-page").addEventListener("click", () => {
+        if (notesState.publicPage > 1) {
+            notesState.publicPage -= 1;
+            loadPublicNotes();
+        }
+    });
+    document.getElementById("public-next-page").addEventListener("click", () => {
+        if (notesState.publicPage < notesState.publicTotalPages) {
+            notesState.publicPage += 1;
+            loadPublicNotes();
+        }
+    });
     document.getElementById("public-search").addEventListener("keydown", (event) => {
         if (event.key === "Enter") loadPublicNotes();
     });
-    document.getElementById("close-public-note").addEventListener("click", loadPublicNotes);
+    document.getElementById("close-public-note").addEventListener("click", () => {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("note");
+        window.history.replaceState({}, "", url);
+        loadPublicNotes();
+    });
 
     if (isAuthenticated()) {
         try {
@@ -811,5 +1034,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         await loadNotes();
+    }
+
+    const sharedNoteId = new URL(window.location.href).searchParams.get("note");
+    if (sharedNoteId) {
+        notesState.activeView = "explore";
+        document.getElementById("my-notes-view").hidden = true;
+        document.getElementById("settings-view").hidden = true;
+        document.getElementById("explore-view").hidden = false;
+        document.getElementById("my-notes-tab").classList.remove("active");
+        document.getElementById("settings-tab").classList.remove("active");
+        document.getElementById("explore-tab").classList.add("active");
+        await openPublicNote(sharedNoteId, false);
     }
 });
