@@ -195,8 +195,30 @@ function renderNotes() {
             ? meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("<span>·</span>")
             : "<span>Uncategorized</span>";
 
-        const fileCount = (note.files || []).length;
+        const files = note.files || [];
+        const fileCount = files.length;
         const published = note.visibility === "public";
+        const sourceListHtml = files.length
+            ? `
+                <div class="owner-source-list">
+                    ${files.map((file) => `
+                        <div class="owner-source-row">
+                            <span title="${escapeHtml(file.filename || "Source file")}">
+                                ${escapeHtml(file.filename || "Source file")}
+                            </span>
+                            <button
+                                class="button button-danger-text"
+                                type="button"
+                                data-remove-source
+                                data-file-id="${escapeHtml(file.fileId || "")}"
+                            >
+                                Remove
+                            </button>
+                        </div>
+                    `).join("")}
+                </div>
+            `
+            : "";
 
         card.innerHTML = `
             <span class="badge">${escapeHtml(note.visibility || "private")}</span>
@@ -204,6 +226,7 @@ function renderNotes() {
             <div class="note-meta">${metaHtml}</div>
             <p class="note-description">${escapeHtml(note.description || "No description yet.")}</p>
             <div class="note-meta"><span>${fileCount} source file${fileCount === 1 ? "" : "s"}</span></div>
+            ${sourceListHtml}
             <div class="note-card-footer">
                 <span class="note-date">${escapeHtml(formatDate(note.publishedAt || note.createdAt))}</span>
                 <div class="upload-block">
@@ -214,6 +237,7 @@ function renderNotes() {
                         <button class="button ${published ? "button-secondary" : "button-primary"}" type="button" data-publish-note>
                             ${published ? "Unpublish" : "Publish"}
                         </button>
+                        <button class="button button-danger" type="button" data-delete-note>Delete Note</button>
                     </div>
                 </div>
             </div>
@@ -221,6 +245,15 @@ function renderNotes() {
 
         card.querySelector("[data-edit-note]").addEventListener("click", () => {
             startEditNote(note);
+        });
+
+        card.querySelectorAll("[data-remove-source]").forEach((button) => {
+            button.addEventListener("click", () => {
+                const fileId = button.dataset.fileId;
+                if (fileId) {
+                    deleteSourceFile(note, fileId);
+                }
+            });
         });
 
         card.querySelector("[data-upload-note]").addEventListener("click", () => {
@@ -232,6 +265,10 @@ function renderNotes() {
 
         card.querySelector("[data-publish-note]").addEventListener("click", () => {
             setPublished(note.noteId, !published);
+        });
+
+        card.querySelector("[data-delete-note]").addEventListener("click", () => {
+            deleteNote(note);
         });
 
         grid.appendChild(card);
@@ -386,6 +423,65 @@ async function handleUploadSelection(event) {
 
     await uploadFileForNote(file, noteId);
     notesState.uploadNoteId = null;
+}
+
+async function deleteSourceFile(note, fileId) {
+    const file = (note.files || []).find((item) => item.fileId === fileId);
+    const filename = file?.filename || "this source file";
+
+    if (!window.confirm(`Remove "${filename}" from this note? This deletes the stored file too.`)) {
+        return;
+    }
+
+    try {
+        const response = await authenticatedFetch(
+            `/api/notes/${encodeURIComponent(note.noteId)}/files/${encodeURIComponent(fileId)}`,
+            {method: "DELETE"}
+        );
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || "Unable to remove source file.");
+        }
+
+        await loadNotes();
+
+        if (notesState.activeView === "explore") {
+            await loadPublicNotes();
+        }
+    } catch (error) {
+        alert(error.message || "Unable to remove source file.");
+    }
+}
+
+async function deleteNote(note) {
+    const warning = note.visibility === "public"
+        ? `Delete "${note.title}"? It is currently public and will disappear from Explore immediately. Its stored source files will also be deleted.`
+        : `Delete "${note.title}"? Its stored source files will also be deleted.`;
+
+    if (!window.confirm(warning)) {
+        return;
+    }
+
+    try {
+        const response = await authenticatedFetch(
+            `/api/notes/${encodeURIComponent(note.noteId)}`,
+            {method: "DELETE"}
+        );
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || "Unable to delete note.");
+        }
+
+        await loadNotes();
+
+        if (notesState.activeView === "explore") {
+            await loadPublicNotes();
+        }
+    } catch (error) {
+        alert(error.message || "Unable to delete note.");
+    }
 }
 
 async function setPublished(noteId, published) {
