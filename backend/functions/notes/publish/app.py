@@ -39,7 +39,8 @@ def current_user_id(event):
 
 
 def current_username(event):
-    return claims(event).get("username")
+    current = claims(event)
+    return current.get("username") or current.get("cognito:username")
 
 
 def public_author_for_user(username):
