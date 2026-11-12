@@ -366,7 +366,8 @@ h3 {
 }
 
 .note-form textarea,
-.search-row input {
+.search-row input,
+.search-row select {
     width: 100%;
     border: 1px solid #d0d5dd;
     border-radius: 10px;
@@ -377,7 +378,8 @@ h3 {
 }
 
 .note-form textarea:focus,
-.search-row input:focus {
+.search-row input:focus,
+.search-row select:focus {
     border-color: #4655d6;
     box-shadow: 0 0 0 3px rgba(70, 85, 214, 0.12);
 }
@@ -401,7 +403,7 @@ h3 {
 
 .search-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(260px, 1fr) minmax(150px, auto) minmax(140px, auto) auto auto;
     gap: 10px;
     margin-bottom: 18px;
 }
