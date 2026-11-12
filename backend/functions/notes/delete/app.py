@@ -27,6 +27,34 @@ def current_user_id(event):
     )
 
 
+def delete_prefix(prefix):
+    continuation_token = None
+
+    while True:
+        list_args = {
+            "Bucket": bucket_name,
+            "Prefix": prefix,
+            "MaxKeys": 1000,
+        }
+
+        if continuation_token:
+            list_args["ContinuationToken"] = continuation_token
+
+        result = s3.list_objects_v2(**list_args)
+        objects = [{"Key": item["Key"]} for item in result.get("Contents", [])]
+
+        if objects:
+            s3.delete_objects(
+                Bucket=bucket_name,
+                Delete={"Objects": objects, "Quiet": True},
+            )
+
+        if not result.get("IsTruncated"):
+            break
+
+        continuation_token = result.get("NextContinuationToken")
+
+
 def lambda_handler(event, context):
     user_id = current_user_id(event)
     if not user_id:
@@ -40,18 +68,16 @@ def lambda_handler(event, context):
     if not note:
         return response(404, {"error": "Note not found"})
 
-    objects = [
-        {"Key": file_record["key"]}
-        for file_record in (note.get("files") or [])
-        if file_record.get("key")
-    ]
-
-    if objects:
-        s3.delete_objects(
-            Bucket=bucket_name,
-            Delete={"Objects": objects, "Quiet": True},
-        )
+    prefix = f"users/{user_id}/notes/{note_id}/"
+    delete_prefix(prefix)
 
     table.delete_item(Key={"userId": user_id, "noteId": note_id})
 
-    return response(200, {"deleted": True, "noteId": note_id})
+    return response(
+        200,
+        {
+            "deleted": True,
+            "noteId": note_id,
+            "deletedPrefix": prefix,
+        },
+    )
