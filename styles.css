@@ -498,3 +498,47 @@ h3 {
         height: 72vh;
     }
 }
+
+
+.owner-source-list {
+    display: grid;
+    gap: 8px;
+    margin: -4px 0 18px;
+}
+
+.owner-source-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 10px;
+    border: 1px solid #e4e7ec;
+    border-radius: 10px;
+    background: #fafbff;
+    color: #475467;
+    font-size: 0.82rem;
+}
+
+.owner-source-row > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.button-danger {
+    background: #fff1f0;
+    color: #b42318;
+}
+
+.button-danger:hover {
+    background: #fee4e2;
+}
+
+.button-danger-text {
+    flex: 0 0 auto;
+    padding: 5px 8px;
+    background: transparent;
+    color: #b42318;
+    font-size: 0.78rem;
+}
