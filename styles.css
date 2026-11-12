@@ -548,3 +548,25 @@ h3 {
     color: #b42318;
     font-size: 0.78rem;
 }
+
+
+.owner-source-list {
+    width: 100%;
+    min-width: 0;
+}
+
+.owner-source-row {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.owner-source-row > span {
+    flex: 1 1 auto;
+    width: 0;
+}
+
+.note-card {
+    min-width: 0;
+}
