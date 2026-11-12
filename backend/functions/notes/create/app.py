@@ -45,6 +45,15 @@ def lambda_handler(event, context):
     if not title:
         return response(400, {"error": "title is required"})
 
+    if len(title) > 160:
+        return response(400, {"error": "title must be 160 characters or fewer"})
+
+    if len(subject) > 100:
+        return response(400, {"error": "subject must be 100 characters or fewer"})
+
+    if len(collection) > 120:
+        return response(400, {"error": "collection must be 120 characters or fewer"})
+
     if len(description) > 1200:
         return response(400, {"error": "description must be 1200 characters or fewer"})
 
