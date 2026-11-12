@@ -170,6 +170,13 @@ function setActiveView(view) {
     }
 }
 
+function isConfiguredAdmin() {
+    const claims = decodeJwtPayload(sessionStorage.getItem("id_token")) || {};
+    const email = String(claims.email || "").trim().toLowerCase();
+    const allowed = (APP_CONFIG.adminEmails || []).map((item) => String(item).trim().toLowerCase());
+    return Boolean(email && allowed.includes(email));
+}
+
 function renderSignedInState() {
     const signedIn = isAuthenticated();
     const signedOutPanel = document.getElementById("signed-out-panel");
@@ -182,7 +189,7 @@ function renderSignedInState() {
     notesApp.hidden = !signedIn;
     myNotesTab.hidden = !signedIn;
     settingsTab.hidden = !signedIn;
-    analyticsTab.hidden = !signedIn || !notesState.isAdmin;
+    analyticsTab.hidden = !signedIn || !isConfiguredAdmin();
 
     if (!signedIn && ["my-notes", "settings", "analytics"].includes(notesState.activeView)) {
         setActiveView("explore");
@@ -537,6 +544,7 @@ async function createNote(event) {
     const collection = document.getElementById("note-collection").value.trim();
     const description = document.getElementById("note-description").value.trim();
     const sourceFile = document.getElementById("note-form-source").files?.[0] || null;
+    const publishAfterSave = document.getElementById("note-form-publish").checked;
     const submitButton = form.querySelector('button[type="submit"]');
     const editingNoteId = notesState.editingNoteId;
 
@@ -595,6 +603,25 @@ async function createNote(event) {
                 document.getElementById("note-form-submit").textContent = "Save Changes";
                 await loadNotes();
                 return;
+            }
+        }
+
+        if (publishAfterSave && targetNoteId) {
+            setCreateStatus("Publishing note...");
+            const publishResponse = await authenticatedFetch(
+                `/api/notes/${encodeURIComponent(targetNoteId)}/publish`,
+                {
+                    method: "PATCH",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({published: true})
+                }
+            );
+            const publishData = await publishResponse.json();
+            if (!publishResponse.ok) {
+                notesState.editingNoteId = targetNoteId;
+                document.getElementById("note-form-title").textContent = "Edit note";
+                document.getElementById("note-form-submit").textContent = "Save Changes";
+                throw new Error(publishData.error || "Note saved, but could not be published.");
             }
         }
 
@@ -860,7 +887,7 @@ async function probeAdminAccess() {
         }
         if (!response.ok) return false;
         notesState.isAdmin = true;
-        document.getElementById("analytics-tab").hidden = false;
+        document.getElementById("analytics-tab").hidden = !isConfiguredAdmin();
         return true;
     } catch (error) {
         console.error("Unable to check admin analytics access:", error);
@@ -1223,6 +1250,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             console.error("Unable to load profile:", error);
         }
 
+        renderSignedInState();
         await probeAdminAccess();
         await loadNotes();
     }
