@@ -11,6 +11,11 @@ Parameters:
     Type: String
     Default: 3t79knetd0pdav5jsso0osfb1e
 
+  CloudFrontOrigin:
+    Type: String
+    Default: https://d84l1y8p4kdic.cloudfront.net
+    Description: Legacy saved deploy parameter; not used during localhost development.
+
 Resources:
   NotesTable:
     Type: AWS::DynamoDB::Table
