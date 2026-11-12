@@ -82,6 +82,7 @@ Resources:
           - GET
           - POST
           - PATCH
+          - DELETE
           - OPTIONS
       Auth:
         Authorizers:
@@ -232,6 +233,60 @@ Resources:
             ApiId: !Ref NotesApi
             Path: /api/notes/{noteId}/files
             Method: POST
+            PayloadFormatVersion: "2.0"
+
+  DeleteSourceFileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/functions/notes/delete_file/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures: [x86_64]
+      MemorySize: 128
+      Timeout: 5
+      Environment:
+        Variables:
+          NOTES_TABLE: !Ref NotesTable
+          NOTES_BUCKET: !Ref NotesBucket
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref NotesTable
+        - S3CrudPolicy:
+            BucketName: !Ref NotesBucket
+      Events:
+        DeleteSourceFile:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotesApi
+            Path: /api/notes/{noteId}/files/{fileId}
+            Method: DELETE
+            PayloadFormatVersion: "2.0"
+
+  DeleteNoteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/functions/notes/delete/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures: [x86_64]
+      MemorySize: 128
+      Timeout: 5
+      Environment:
+        Variables:
+          NOTES_TABLE: !Ref NotesTable
+          NOTES_BUCKET: !Ref NotesBucket
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref NotesTable
+        - S3CrudPolicy:
+            BucketName: !Ref NotesBucket
+      Events:
+        DeleteNote:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotesApi
+            Path: /api/notes/{noteId}
+            Method: DELETE
             PayloadFormatVersion: "2.0"
 
   PublishNoteFunction:
