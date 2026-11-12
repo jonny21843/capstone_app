@@ -4,11 +4,19 @@ import re
 import uuid
 
 import boto3
+from botocore.config import Config
 
 
 table = boto3.resource("dynamodb").Table(os.environ["NOTES_TABLE"])
-s3 = boto3.client("s3")
 bucket_name = os.environ["NOTES_BUCKET"]
+aws_region = os.environ.get("AWS_REGION", "us-east-2")
+
+s3 = boto3.client(
+    "s3",
+    region_name=aws_region,
+    endpoint_url=f"https://s3.{aws_region}.amazonaws.com",
+    config=Config(signature_version="s3v4"),
+)
 
 SAFE_FILENAME = re.compile(r"[^A-Za-z0-9._ -]+")
 
