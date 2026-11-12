@@ -6,7 +6,5 @@ const APP_CONFIG = {
     cognitoClientId: "3t79knetd0pdav5jsso0osfb1e",
     cognitoRedirectUri: "https://d84l1y8p4kdic.cloudfront.net/auth/callback.html",
     cognitoLogoutUri: "https://d84l1y8p4kdic.cloudfront.net/",
-    // Set this after deploying infrastructure/template.yaml.
-    // Example: https://abc123.execute-api.us-east-2.amazonaws.com
-    apiBaseUrl: ""
+    apiBaseUrl: "https://nxa9uz2cv0.execute-api.us-east-2.amazonaws.com"
 };
