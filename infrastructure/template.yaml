@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Serverless API foundation for the Notes App.
+
+Parameters:
+  CognitoUserPoolId:
+    Type: String
+    Default: us-east-2_sZ3qWdfwv
+
+  CognitoAppClientId:
+    Type: String
+    Default: 3t79knetd0pdav5jsso0osfb1e
+
+  CloudFrontOrigin:
+    Type: String
+    Default: https://d84l1y8p4kdic.cloudfront.net
+
+Resources:
+  NotesApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: "$default"
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref CloudFrontOrigin
+          - http://localhost:8080
+        AllowHeaders:
+          - Authorization
+          - Content-Type
+        AllowMethods:
+          - GET
+          - OPTIONS
+      DefinitionBody:
+        openapi: "3.0.1"
+        info:
+          title: Notes App API
+          version: "1.0"
+        paths: {}
+      Auth:
+        Authorizers:
+          CognitoJwtAuthorizer:
+            IdentitySource: "$request.header.Authorization"
+            JwtConfiguration:
+              issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPoolId}"
+              audience:
+                - !Ref CognitoAppClientId
+        DefaultAuthorizer: CognitoJwtAuthorizer
+
+  MeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/functions/me/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 5
+      Events:
+        GetMe:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotesApi
+            Path: /api/me
+            Method: GET
+            PayloadFormatVersion: "2.0"
+
+Outputs:
+  ApiBaseUrl:
+    Description: Base URL for the Notes App HTTP API.
+    Value: !Sub "https://${NotesApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}"
