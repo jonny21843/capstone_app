@@ -73,6 +73,7 @@ def lambda_handler(event, context):
                 "subject": note.get("subject", ""),
                 "collection": note.get("collection", ""),
                 "description": note.get("description", ""),
+                "publicAuthor": note.get("publicAuthor", "Community member"),
                 "publishedAt": note.get("publishedAt"),
                 "files": files,
             }
