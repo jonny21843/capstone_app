@@ -3,10 +3,11 @@ import os
 from datetime import datetime, timezone
 
 import boto3
-from botocore.exceptions import ClientError
 
 
 table = boto3.resource("dynamodb").Table(os.environ["NOTES_TABLE"])
+cognito = boto3.client("cognito-idp")
+user_pool_id = os.environ["COGNITO_USER_POOL_ID"]
 
 
 def response(status_code, body):
@@ -17,20 +18,48 @@ def response(status_code, body):
     }
 
 
-def current_user_id(event):
+def claims(event):
     return (
         event.get("requestContext", {})
         .get("authorizer", {})
         .get("jwt", {})
         .get("claims", {})
-        .get("sub")
     )
+
+
+def current_user_id(event):
+    return claims(event).get("sub")
+
+
+def current_username(event):
+    return claims(event).get("username")
+
+
+def public_author_for_user(username):
+    user = cognito.admin_get_user(
+        UserPoolId=user_pool_id,
+        Username=username,
+    )
+    attributes = {
+        item["Name"]: item.get("Value", "")
+        for item in user.get("UserAttributes", [])
+    }
+
+    first_name = (attributes.get("given_name") or "").strip()
+    last_name = (attributes.get("family_name") or "").strip()
+
+    if not first_name or not last_name:
+        return None
+
+    return f"{first_name} {last_name[0].upper()}."
 
 
 def lambda_handler(event, context):
     user_id = current_user_id(event)
-    if not user_id:
-        return response(401, {"error": "Authenticated user ID is missing"})
+    username = current_username(event)
+
+    if not user_id or not username:
+        return response(401, {"error": "Authenticated user identity is missing"})
 
     note_id = (event.get("pathParameters") or {}).get("noteId")
     if not note_id:
@@ -42,7 +71,6 @@ def lambda_handler(event, context):
         return response(400, {"error": "Request body must be valid JSON"})
 
     published = payload.get("published")
-    author_display_name = (payload.get("authorDisplayName") or "").strip()
     if not isinstance(published, bool):
         return response(400, {"error": "published must be true or false"})
 
@@ -58,8 +86,9 @@ def lambda_handler(event, context):
         if not note.get("files"):
             return response(400, {"error": "Upload at least one source file before publishing"})
 
+        author_display_name = public_author_for_user(username)
         if not author_display_name:
-            author_display_name = "Community member"
+            return response(400, {"error": "Complete your first and last name before publishing"})
 
         result = table.update_item(
             Key={"userId": user_id, "noteId": note_id},
@@ -70,7 +99,7 @@ def lambda_handler(event, context):
             ExpressionAttributeValues={
                 ":public": "public",
                 ":published_at": now,
-                ":public_author": author_display_name[:80],
+                ":public_author": author_display_name,
                 ":updated": now,
             },
             ReturnValues="ALL_NEW",
