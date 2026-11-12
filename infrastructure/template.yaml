@@ -11,31 +11,65 @@ Parameters:
     Type: String
     Default: 3t79knetd0pdav5jsso0osfb1e
 
-  CloudFrontOrigin:
-    Type: String
-    Default: https://d84l1y8p4kdic.cloudfront.net
-
 Resources:
+  NotesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: noteId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: noteId
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  NotesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - http://localhost:8080
+            AllowedMethods:
+              - PUT
+              - GET
+            AllowedHeaders:
+              - "*"
+            ExposedHeaders:
+              - ETag
+            MaxAge: 300
+
   NotesApi:
     Type: AWS::Serverless::HttpApi
     Properties:
       StageName: "$default"
       CorsConfiguration:
         AllowOrigins:
-          - !Ref CloudFrontOrigin
           - http://localhost:8080
         AllowHeaders:
           - Authorization
           - Content-Type
         AllowMethods:
           - GET
+          - POST
           - OPTIONS
-      DefinitionBody:
-        openapi: "3.0.1"
-        info:
-          title: Notes App API
-          version: "1.0"
-        paths: {}
       Auth:
         Authorizers:
           CognitoJwtAuthorizer:
@@ -65,7 +99,93 @@ Resources:
             Method: GET
             PayloadFormatVersion: "2.0"
 
+  CreateNoteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/functions/notes/create/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 5
+      Environment:
+        Variables:
+          NOTES_TABLE: !Ref NotesTable
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref NotesTable
+      Events:
+        CreateNote:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotesApi
+            Path: /api/notes
+            Method: POST
+            PayloadFormatVersion: "2.0"
+
+  ListNotesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/functions/notes/list/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 5
+      Environment:
+        Variables:
+          NOTES_TABLE: !Ref NotesTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref NotesTable
+      Events:
+        ListNotes:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotesApi
+            Path: /api/notes
+            Method: GET
+            PayloadFormatVersion: "2.0"
+
+  CreateUploadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/functions/notes/upload/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 5
+      Environment:
+        Variables:
+          NOTES_TABLE: !Ref NotesTable
+          NOTES_BUCKET: !Ref NotesBucket
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref NotesTable
+        - S3WritePolicy:
+            BucketName: !Ref NotesBucket
+      Events:
+        CreateUpload:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotesApi
+            Path: /api/notes/{noteId}/upload
+            Method: POST
+            PayloadFormatVersion: "2.0"
+
 Outputs:
   ApiBaseUrl:
     Description: Base URL for the Notes App HTTP API.
     Value: !Sub "https://${NotesApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}"
+
+  NotesTableName:
+    Description: DynamoDB table used for user-owned note metadata.
+    Value: !Ref NotesTable
+
+  NotesBucketName:
+    Description: Private S3 bucket used for note source files.
+    Value: !Ref NotesBucket
