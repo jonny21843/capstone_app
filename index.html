@@ -2,121 +2,99 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Feagans Capstone Project</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notes App</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-
-<h1>Welcome to Feagans Capstone Project</h1>
-
-<div class="auth-bar">
-    <span id="auth-status">Not signed in</span>
-    <button id="sign-in-btn" class="primary-btn">Sign In</button>
-    <button id="sign-out-btn" class="primary-btn" hidden>Sign Out</button>
-</div>
-
-<div class="tabs">
-    <button class="tab-button" data-tab="upload"><span>📤</span> Upload</button>
-    <button class="tab-button" data-tab="view"><span>📁</span> View Files</button>
-    <button class="tab-button" data-tab="about"><span>📘</span> About</button>
-</div>
-
-<!-- UPLOAD SECTION -->
-<section id="upload" class="tab-section hidden">
-    <div class="card">
-        <h2>Upload Files</h2>
-
-        <label>Choose Field:</label>
-        <select id="upload-field"></select>
-
-        <label>Create New Field:</label>
-        <input id="upload-new-field" placeholder="e.g. Medicine">
-
-        <br><br>
-
-        <label>Choose Category:</label>
-        <select id="upload-category"></select>
-
-        <label>Create New Category:</label>
-        <input id="upload-new-category" placeholder="e.g. Anatomy">
-
-        <div id="drop-zone" class="drop-zone">
-            Drag & drop a file here or click to select
+    <header class="site-header">
+        <div>
+            <p class="eyebrow">Study smarter from the notes you already have</p>
+            <h1>Notes App</h1>
+            <p class="subtitle">
+                Organize notes, upload source pages, and turn them into study material.
+            </p>
         </div>
 
-        <input type="file" id="file-input" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" hidden>
-
-        <button id="upload-btn" class="primary-btn">Upload</button>
-        <div class="upload-status-row">
-            <span id="upload-status-icon" class="status-icon"></span>
-            <span id="upload-status"></span>
+        <div class="auth-bar">
+            <span id="auth-status">Not signed in</span>
+            <button id="sign-in-btn" class="button button-primary">Sign In</button>
+            <button id="sign-out-btn" class="button button-secondary" hidden>Sign Out</button>
         </div>
-        <div class="upload-progress">
-            <div id="upload-progress-bar" class="upload-progress-bar"></div>
-        </div>
+    </header>
 
-    </div>
-</section>
+    <main class="app-shell">
+        <section id="signed-out-panel" class="hero-card">
+            <div>
+                <p class="eyebrow">Your study library</p>
+                <h2>Bring handwritten and digital notes together.</h2>
+                <p>
+                    Sign in to create private notes, upload PDFs or images, and build your study library.
+                </p>
+            </div>
+            <button id="hero-sign-in-btn" class="button button-primary">Sign In to Get Started</button>
+        </section>
 
-<!-- VIEW FILES SECTION -->
-<section id="view" class="tab-section hidden">
-    <div class="card">
-        <h2>Available Files</h2>
+        <section id="notes-app" hidden>
+            <div class="dashboard-toolbar">
+                <div>
+                    <p class="eyebrow">Library</p>
+                    <h2>Your Notes</h2>
+                </div>
+                <button id="new-note-btn" class="button button-primary">+ New Note</button>
+            </div>
 
-        <div id="breadcrumb">Home</div>
+            <section id="create-note-panel" class="card" hidden>
+                <div class="card-heading">
+                    <div>
+                        <h3>Create a note</h3>
+                        <p>Start with a title. Subject and collection help keep larger study libraries organized.</p>
+                    </div>
+                    <button id="cancel-note-btn" class="button button-text" type="button">Cancel</button>
+                </div>
 
-        <input id="search-box" class="search-box" placeholder="Search files...">
+                <form id="create-note-form" class="note-form">
+                    <label>
+                        Title
+                        <input id="note-title" name="title" required maxlength="160" placeholder="AWS VPC Notes">
+                    </label>
 
-        <label>Select Field:</label>
-        <select id="view-field">
-            <option value="">-- Select Field --</option>
-        </select>
+                    <div class="form-grid">
+                        <label>
+                            Subject
+                            <input id="note-subject" name="subject" maxlength="100" placeholder="AWS">
+                        </label>
 
-        <label>Select Category:</label>
-        <select id="view-category">
-            <option value="">-- Select Category --</option>
-        </select>
+                        <label>
+                            Collection
+                            <input id="note-collection" name="collection" maxlength="120" placeholder="Solutions Architect Associate">
+                        </label>
+                    </div>
 
-        <ul id="file-list"></ul>
-    </div>
-</section>
+                    <div class="form-actions">
+                        <span id="create-note-status" class="status-text" aria-live="polite"></span>
+                        <button type="submit" class="button button-primary">Create Note</button>
+                    </div>
+                </form>
+            </section>
 
-<!-- ABOUT SECTION -->
-<section id="about" class="tab-section hidden">
-<div class="about-card">
-  <h2>About This Project</h2>
+            <section id="notes-status" class="status-card" aria-live="polite">
+                Loading your notes...
+            </section>
 
-  <p>
-    This website is designed to make uploading and organizing notes simple and intuitive.
-  </p>
+            <section id="notes-grid" class="notes-grid" aria-live="polite"></section>
+        </section>
+    </main>
 
-  <p>
-    Users start by navigating to the <strong>Upload Files</strong> section and selecting a Field,
-    which represents a broad subject area such as IT or Medicine.
-  </p>
+    <input
+        id="note-upload-input"
+        type="file"
+        accept=".pdf,.png,.jpg,.jpeg,.webp"
+        hidden
+    >
 
-  <p>
-    If a suitable field does not already exist, users can create a new one.
-    They then select or create a Category to further organize their notes.
-  </p>
-
-  <p>
-    Once a field and category are selected, users choose a file from their device and upload it.
-    Files are securely stored and automatically associated with the selected field and category.
-  </p>
-
-  <p>
-    Uploaded files can be viewed in the <strong>View Files</strong> section, where notes are
-    organized based on their field and category, making materials easy to locate and review.
-  </p>
-</div>
-</section>
-
-<script src="config.js"></script>
-<script src="auth.js"></script>
-<script src="tabs.js"></script>
-<script src="upload.js"></script>
-<script src="view.js"></script>
-
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+    <script src="notes.js"></script>
 </body>
 </html>
