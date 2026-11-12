@@ -1,6 +1,8 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, g
 import boto3
 import os
+
+from auth import require_auth
 
 app = Flask(__name__)
 
@@ -18,6 +20,17 @@ def safe_segment(value: str) -> str:
 @app.route("/health", methods=["GET"])
 def health():
     return "ok", 200
+
+
+@app.route("/api/me", methods=["GET"])
+@require_auth
+def current_user():
+    return jsonify(
+        {
+            "userId": g.user_id,
+            "username": g.user_claims.get("username"),
+        }
+    )
 
 
 # -------------------------
