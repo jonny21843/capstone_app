@@ -7,7 +7,9 @@ const notesState = {
     replaceFileId: null,
     publicPage: 1,
     publicTotalPages: 1,
-    profile: null
+    profile: null,
+    uploadFeedback: {},
+    isAdmin: false
 };
 
 function apiUrl(path) {
@@ -23,7 +25,7 @@ async function authenticatedFetch(path, options = {}) {
 
     const response = await fetch(apiUrl(path), { ...options, headers });
 
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
         clearTokens();
         await updateAuthUi();
         renderSignedInState();
@@ -155,12 +157,16 @@ function setActiveView(view) {
     document.getElementById("my-notes-view").hidden = view !== "my-notes";
     document.getElementById("explore-view").hidden = view !== "explore";
     document.getElementById("settings-view").hidden = view !== "settings";
+    document.getElementById("analytics-view").hidden = view !== "analytics";
     document.getElementById("my-notes-tab").classList.toggle("active", view === "my-notes");
     document.getElementById("explore-tab").classList.toggle("active", view === "explore");
     document.getElementById("settings-tab").classList.toggle("active", view === "settings");
+    document.getElementById("analytics-tab").classList.toggle("active", view === "analytics");
 
     if (view === "explore") {
         loadPublicNotes();
+    } else if (view === "analytics") {
+        loadAdminAnalytics();
     }
 }
 
@@ -170,13 +176,15 @@ function renderSignedInState() {
     const notesApp = document.getElementById("notes-app");
     const myNotesTab = document.getElementById("my-notes-tab");
     const settingsTab = document.getElementById("settings-tab");
+    const analyticsTab = document.getElementById("analytics-tab");
 
     signedOutPanel.hidden = signedIn;
     notesApp.hidden = !signedIn;
     myNotesTab.hidden = !signedIn;
     settingsTab.hidden = !signedIn;
+    analyticsTab.hidden = !signedIn || !notesState.isAdmin;
 
-    if (!signedIn && (notesState.activeView === "my-notes" || notesState.activeView === "settings")) {
+    if (!signedIn && ["my-notes", "settings", "analytics"].includes(notesState.activeView)) {
         setActiveView("explore");
     }
 }
@@ -216,8 +224,10 @@ function setCreateStatus(message, type = "") {
 function formatBytes(value) {
     const bytes = Number(value || 0);
     if (!bytes) return "";
+    if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 function formatDate(value) {
@@ -243,6 +253,38 @@ function escapeHtml(value) {
 
 function noteMeta(note) {
     return [note.subject, note.collection].filter(Boolean);
+}
+
+function setUploadFeedback(noteId, message, type = "") {
+    notesState.uploadFeedback[noteId] = {message: message || "", type};
+    const status = findUploadStatus(noteId);
+    if (status) {
+        status.textContent = message || "";
+        status.className = `upload-status ${type}`.trim();
+    }
+}
+
+function validateSourceFile(file) {
+    if (!file) return null;
+
+    const allowedTypes = new Set([
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    ]);
+    const contentType = file.type || "application/octet-stream";
+    const maxFileBytes = 20 * 1024 * 1024;
+
+    if (!allowedTypes.has(contentType)) {
+        return "Unsupported file type. Use PDF, JPG, PNG, WEBP, PPT, or PPTX.";
+    }
+    if (file.size > maxFileBytes) {
+        return "File is too large. Maximum size is 20 MB.";
+    }
+    return null;
 }
 
 function renderEmbeddedSource(file) {
@@ -379,7 +421,7 @@ function renderNotes() {
             <div class="note-card-footer">
                 <span class="note-date">${escapeHtml(formatDate(note.publishedAt || note.createdAt))}</span>
                 <div class="upload-block">
-                    <span class="upload-status" data-upload-status></span>
+                    <span class="upload-status ${escapeHtml(notesState.uploadFeedback[note.noteId]?.type || "")}" data-upload-status>${escapeHtml(notesState.uploadFeedback[note.noteId]?.message || "")}</span>
                     <div class="note-actions">
                         <button class="button button-secondary" type="button" data-edit-note>Edit</button>
                         <button class="button button-secondary" type="button" data-upload-note ${notesState.uploadInProgress ? "disabled" : ""}>${notesState.uploadInProgress ? "Upload in progress…" : "Upload Source"}</button>
@@ -494,11 +536,23 @@ async function createNote(event) {
     const subject = document.getElementById("note-subject").value.trim();
     const collection = document.getElementById("note-collection").value.trim();
     const description = document.getElementById("note-description").value.trim();
+    const sourceFile = document.getElementById("note-form-source").files?.[0] || null;
     const submitButton = form.querySelector('button[type="submit"]');
     const editingNoteId = notesState.editingNoteId;
 
     if (!title) {
         setCreateStatus("A title is required.", "error");
+        return;
+    }
+
+    const sourceValidationError = validateSourceFile(sourceFile);
+    if (sourceValidationError) {
+        setCreateStatus(sourceValidationError, "error");
+        return;
+    }
+
+    if (sourceFile && notesState.uploadInProgress) {
+        setCreateStatus("Please wait for the current upload to finish.", "error");
         return;
     }
 
@@ -522,11 +576,34 @@ async function createNote(event) {
             );
         }
 
+        const targetNoteId = editingNoteId || data.note?.noteId;
+
+        if (sourceFile && targetNoteId) {
+            notesState.uploadInProgress = true;
+            setCreateStatus("Uploading source file...");
+            const uploadOk = await uploadFileForNote(
+                sourceFile,
+                targetNoteId,
+                null,
+                document.getElementById("create-note-status")
+            );
+            notesState.uploadInProgress = false;
+
+            if (!uploadOk) {
+                notesState.editingNoteId = targetNoteId;
+                document.getElementById("note-form-title").textContent = "Edit note";
+                document.getElementById("note-form-submit").textContent = "Save Changes";
+                await loadNotes();
+                return;
+            }
+        }
+
         notesState.editingNoteId = null;
         form.reset();
         showCreatePanel(false);
         await loadNotes();
     } catch (error) {
+        notesState.uploadInProgress = false;
         setCreateStatus(
             error.message || (editingNoteId ? "Unable to update note." : "Unable to create note."),
             "error"
@@ -542,33 +619,29 @@ function findUploadStatus(noteId) {
         ?.querySelector("[data-upload-status]") || null;
 }
 
-async function uploadFileForNote(file, noteId, replaceFileId = null) {
-    const status = findUploadStatus(noteId);
+async function uploadFileForNote(file, noteId, replaceFileId = null, statusOverride = null) {
+    const status = statusOverride || findUploadStatus(noteId);
     const contentType = file.type || "application/octet-stream";
-    const allowedTypes = new Set([
-        "application/pdf",
-        "image/jpeg",
-        "image/png",
-        "image/webp",
-        "application/vnd.ms-powerpoint",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-    ]);
-    const maxFileBytes = 20 * 1024 * 1024;
 
-    if (!allowedTypes.has(contentType)) {
-        status.textContent = "Unsupported file type. Use PDF, JPG, PNG, WEBP, PPT, or PPTX.";
-        status.className = "upload-status error";
-        return;
+    const updateStatus = (message, type = "") => {
+        if (!statusOverride) {
+            setUploadFeedback(noteId, message, type);
+        }
+        if (status) {
+            status.textContent = message || "";
+            status.className = statusOverride
+                ? `status-text ${type}`.trim()
+                : `upload-status ${type}`.trim();
+        }
+    };
+
+    const validationError = validateSourceFile(file);
+    if (validationError) {
+        updateStatus(validationError, "error");
+        return false;
     }
 
-    if (file.size > maxFileBytes) {
-        status.textContent = "File is too large. Maximum size is 20 MB.";
-        status.className = "upload-status error";
-        return;
-    }
-
-    status.textContent = "Preparing upload...";
-    status.className = "upload-status";
+    updateStatus("Preparing upload...");
 
     try {
         const presignResponse = await authenticatedFetch(
@@ -588,7 +661,7 @@ async function uploadFileForNote(file, noteId, replaceFileId = null) {
         const presign = await presignResponse.json();
         if (!presignResponse.ok) throw new Error(presign.error || "Unable to prepare upload.");
 
-        status.textContent = "Uploading...";
+        updateStatus("Uploading...");
 
         const uploadBody = new FormData();
         Object.entries(presign.uploadFields || {}).forEach(([name, value]) => {
@@ -603,12 +676,12 @@ async function uploadFileForNote(file, noteId, replaceFileId = null) {
 
         if (!uploadResponse.ok) {
             if (uploadResponse.status === 400 || uploadResponse.status === 403) {
-                throw new Error("Upload was rejected by storage. Check the file type and 20 MB size limit.");
+                throw new Error("Upload rejected: file must be an allowed type and no larger than 20 MB.");
             }
-            throw new Error(`S3 upload failed with status ${uploadResponse.status}`);
+            throw new Error(`Upload failed with status ${uploadResponse.status}.`);
         }
 
-        status.textContent = "Saving file...";
+        updateStatus("Saving file...");
         const registerResponse = await authenticatedFetch(
             `/api/notes/${encodeURIComponent(noteId)}/files`,
             {
@@ -626,13 +699,13 @@ async function uploadFileForNote(file, noteId, replaceFileId = null) {
         const registered = await registerResponse.json();
         if (!registerResponse.ok) throw new Error(registered.error || "Uploaded, but could not register file.");
 
-        status.textContent = replaceFileId ? "Replaced successfully" : "Uploaded successfully";
-        status.className = "upload-status success";
+        updateStatus(replaceFileId ? "Replaced successfully" : "Uploaded successfully", "success");
         await loadNotes();
+        return true;
     } catch (error) {
         console.error("Upload failed:", error);
-        status.textContent = error.message || "Upload failed";
-        status.className = "upload-status error";
+        updateStatus(error.message || "Upload failed", "error");
+        return false;
     }
 }
 
@@ -775,6 +848,115 @@ async function setPublished(noteId, published) {
     }
 }
 
+async function probeAdminAccess() {
+    if (!isAuthenticated()) return false;
+
+    try {
+        const response = await authenticatedFetch("/api/admin/analytics?probe=1");
+        if (response.status === 403) {
+            notesState.isAdmin = false;
+            document.getElementById("analytics-tab").hidden = true;
+            return false;
+        }
+        if (!response.ok) return false;
+        notesState.isAdmin = true;
+        document.getElementById("analytics-tab").hidden = false;
+        return true;
+    } catch (error) {
+        console.error("Unable to check admin analytics access:", error);
+        return false;
+    }
+}
+
+function renderAnalyticsList(elementId, items, emptyText) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+
+    if (!items?.length) {
+        element.innerHTML = `<p class="note-description">${escapeHtml(emptyText)}</p>`;
+        return;
+    }
+
+    element.innerHTML = items.map((item) => `
+        <div class="analytics-list-row">
+            <span>${escapeHtml(item.label)}</span>
+            <strong>${Number(item.count || 0)}</strong>
+        </div>
+    `).join("");
+}
+
+async function loadAdminAnalytics() {
+    const status = document.getElementById("analytics-status");
+    const content = document.getElementById("analytics-content");
+    status.hidden = false;
+    status.textContent = "Loading analytics...";
+    status.style.color = "";
+    content.hidden = true;
+
+    try {
+        const response = await authenticatedFetch("/api/admin/analytics");
+        const data = await response.json();
+
+        if (response.status === 403) {
+            notesState.isAdmin = false;
+            document.getElementById("analytics-tab").hidden = true;
+            setActiveView("my-notes");
+            return;
+        }
+        if (!response.ok) throw new Error(data.error || "Unable to load analytics.");
+
+        const metrics = data.metrics || {};
+        document.getElementById("metric-users").textContent = Number(metrics.users || 0);
+        document.getElementById("metric-notes").textContent = Number(metrics.notes || 0);
+        document.getElementById("metric-public-notes").textContent = Number(metrics.publicNotes || 0);
+        document.getElementById("metric-private-notes").textContent = Number(metrics.privateNotes || 0);
+        document.getElementById("metric-source-files").textContent = Number(metrics.sourceFiles || 0);
+        document.getElementById("metric-storage").textContent = formatBytes(metrics.storageBytes || 0) || "0 B";
+        document.getElementById("metric-views").textContent = Number(metrics.views || 0);
+        document.getElementById("metric-average-files").textContent = Number(metrics.averageFilesPerNote || 0).toFixed(2);
+
+        renderAnalyticsList("analytics-subjects", data.topSubjects || [], "No subjects yet.");
+        renderAnalyticsList("analytics-collections", data.topCollections || [], "No collections yet.");
+
+        const recent = document.getElementById("analytics-recent");
+        if (!(data.recentPublished || []).length) {
+            recent.innerHTML = '<p class="note-description">No published notes yet.</p>';
+        } else {
+            recent.innerHTML = data.recentPublished.map((note) => `
+                <div class="analytics-recent-row">
+                    <div>
+                        <strong>${escapeHtml(note.title || "Untitled note")}</strong>
+                        <span>${escapeHtml([note.subject, note.collection].filter(Boolean).join(" · "))}</span>
+                    </div>
+                    <div class="analytics-recent-meta">
+                        <span>${Number(note.viewCount || 0)} views</span>
+                        <span>${Number(note.fileCount || 0)} files</span>
+                        <span>${escapeHtml(formatDate(note.publishedAt))}</span>
+                    </div>
+                </div>
+            `).join("");
+        }
+
+        status.hidden = true;
+        content.hidden = false;
+    } catch (error) {
+        status.textContent = error.message || "Unable to load analytics.";
+        status.style.color = "#b42318";
+    }
+}
+
+function showCopyToast(event) {
+    const toast = document.createElement("div");
+    toast.className = "copy-toast";
+    toast.textContent = "Copied";
+    const x = event?.clientX ?? window.innerWidth / 2;
+    const y = event?.clientY ?? 80;
+    toast.style.left = `${Math.min(x + 10, window.innerWidth - 90)}px`;
+    toast.style.top = `${Math.min(y + 10, window.innerHeight - 50)}px`;
+    document.body.appendChild(toast);
+    window.setTimeout(() => toast.remove(), 1100);
+}
+
 function setPublicStatus(message, isError = false) {
     const status = document.getElementById("public-status");
     status.hidden = false;
@@ -895,11 +1077,11 @@ function publicNoteShareUrl(noteId) {
     return url.toString();
 }
 
-async function sharePublicNote(noteId) {
+async function sharePublicNote(noteId, event = null) {
     const url = publicNoteShareUrl(noteId);
     try {
         await navigator.clipboard.writeText(url);
-        alert("Share link copied.");
+        showCopyToast(event);
     } catch {
         window.prompt("Copy this note link:", url);
     }
@@ -950,7 +1132,7 @@ async function openPublicNote(noteId, updateUrl = true) {
         grid.hidden = true;
         document.getElementById("public-status").hidden = true;
         detail.hidden = false;
-        document.getElementById("share-public-note")?.addEventListener("click", () => sharePublicNote(noteId));
+        document.getElementById("share-public-note")?.addEventListener("click", (event) => sharePublicNote(noteId, event));
     } catch (error) {
         setPublicStatus(error.message || "Unable to open note.", true);
     }
@@ -969,6 +1151,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         setActiveView("explore");
     });
     document.getElementById("settings-tab").addEventListener("click", () => setActiveView("settings"));
+    document.getElementById("analytics-tab").addEventListener("click", () => setActiveView("analytics"));
+    document.getElementById("refresh-analytics").addEventListener("click", loadAdminAnalytics);
     document.getElementById("new-note-btn").addEventListener("click", () => {
         notesState.editingNoteId = null;
         document.getElementById("create-note-form").reset();
@@ -1039,6 +1223,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             console.error("Unable to load profile:", error);
         }
 
+        await probeAdminAccess();
         await loadNotes();
     }
 
@@ -1047,9 +1232,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         notesState.activeView = "explore";
         document.getElementById("my-notes-view").hidden = true;
         document.getElementById("settings-view").hidden = true;
+        document.getElementById("analytics-view").hidden = true;
         document.getElementById("explore-view").hidden = false;
         document.getElementById("my-notes-tab").classList.remove("active");
         document.getElementById("settings-tab").classList.remove("active");
+        document.getElementById("analytics-tab").classList.remove("active");
         document.getElementById("explore-tab").classList.add("active");
         await openPublicNote(sharedNoteId, false);
     }
