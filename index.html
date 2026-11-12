@@ -139,30 +139,53 @@
                 </div>
             </div>
 
-            <div class="search-row">
-                <input id="public-search" type="search" placeholder="Search AWS IAM, networking, biology, calculus...">
-                <select id="public-subject" aria-label="Filter by subject">
-                    <option value="">All subjects</option>
-                </select>
-                <select id="public-collection" aria-label="Filter by collection">
-                    <option value="">All collections</option>
-                </select>
-                <select id="public-sort" aria-label="Sort public notes">
-                    <option value="newest">Newest</option>
-                    <option value="oldest">Oldest</option>
-                    <option value="title">Title A–Z</option>
-                    <option value="views">Most viewed</option>
-                </select>
-                <button id="public-search-btn" class="button button-primary" type="button">Search</button>
-                <button id="public-search-clear" class="button button-secondary" type="button">Clear</button>
-            </div>
+            <section class="explore-controls">
+                <div class="explore-search-line">
+                    <input id="public-search" type="search" placeholder="Search titles, subjects, collections, or keywords...">
+                    <button id="public-search-btn" class="button button-primary" type="button">Search</button>
+                </div>
+
+                <div class="explore-filter-line">
+                    <div class="explore-filter-group">
+                        <select id="public-subject" aria-label="Filter by subject">
+                            <option value="">All subjects</option>
+                        </select>
+                        <select id="public-collection" aria-label="Filter by collection">
+                            <option value="">All collections</option>
+                        </select>
+                        <select id="public-sort" aria-label="Sort public notes">
+                            <option value="newest">Newest</option>
+                            <option value="oldest">Oldest</option>
+                            <option value="title">Title A–Z</option>
+                            <option value="views">Most viewed</option>
+                        </select>
+                        <select id="public-page-size" aria-label="Notes per page">
+                            <option value="12">12 per page</option>
+                            <option value="18" selected>18 per page</option>
+                            <option value="24">24 per page</option>
+                            <option value="48">48 per page</option>
+                        </select>
+                    </div>
+                    <button id="public-search-clear" class="button button-text" type="button">Clear filters</button>
+                </div>
+
+                <div class="explore-results-bar">
+                    <div>
+                        <strong id="public-result-summary">Loading notes...</strong>
+                        <div id="public-active-filters" class="active-filter-list"></div>
+                    </div>
+                    <span id="public-page-summary" class="status-text"></span>
+                </div>
+            </section>
 
             <section id="public-status" class="status-card" aria-live="polite">Loading public notes...</section>
-            <section id="public-grid" class="notes-grid" aria-live="polite"></section>
+            <section id="public-grid" class="public-notes-grid" aria-live="polite"></section>
             <div id="public-pagination" class="pagination-row" hidden>
+                <button id="public-first-page" class="button button-text" type="button">First</button>
                 <button id="public-prev-page" class="button button-secondary" type="button">← Previous</button>
                 <span id="public-page-label" class="status-text"></span>
                 <button id="public-next-page" class="button button-secondary" type="button">Next →</button>
+                <button id="public-last-page" class="button button-text" type="button">Last</button>
             </div>
 
             <section id="public-note-detail" class="card" hidden>
