@@ -1,6 +1,7 @@
 const notesState = {
     notes: [],
     uploadNoteId: null,
+    editingNoteId: null,
     activeView: "my-notes"
 };
 
@@ -48,7 +49,27 @@ function renderSignedInState() {
 function showCreatePanel(show) {
     const panel = document.getElementById("create-note-panel");
     panel.hidden = !show;
+
+    if (!show) {
+        notesState.editingNoteId = null;
+        document.getElementById("create-note-form")?.reset();
+        document.getElementById("note-form-title").textContent = "Create a note";
+        document.getElementById("note-form-submit").textContent = "Create Note";
+    }
+
     if (show) document.getElementById("note-title")?.focus();
+}
+
+function startEditNote(note) {
+    notesState.editingNoteId = note.noteId;
+    document.getElementById("note-title").value = note.title || "";
+    document.getElementById("note-subject").value = note.subject || "";
+    document.getElementById("note-collection").value = note.collection || "";
+    document.getElementById("note-description").value = note.description || "";
+    document.getElementById("note-form-title").textContent = "Edit note";
+    document.getElementById("note-form-submit").textContent = "Save Changes";
+    setCreateStatus("");
+    showCreatePanel(true);
 }
 
 function setCreateStatus(message, type = "") {
@@ -127,6 +148,7 @@ function renderNotes() {
                 <div class="upload-block">
                     <span class="upload-status" data-upload-status></span>
                     <div class="note-actions">
+                        <button class="button button-secondary" type="button" data-edit-note>Edit</button>
                         <button class="button button-secondary" type="button" data-upload-note>Upload Source</button>
                         <button class="button ${published ? "button-secondary" : "button-primary"}" type="button" data-publish-note>
                             ${published ? "Unpublish" : "Publish"}
@@ -135,6 +157,10 @@ function renderNotes() {
                 </div>
             </div>
         `;
+
+        card.querySelector("[data-edit-note]").addEventListener("click", () => {
+            startEditNote(note);
+        });
 
         card.querySelector("[data-upload-note]").addEventListener("click", () => {
             notesState.uploadNoteId = note.noteId;
@@ -189,6 +215,7 @@ async function createNote(event) {
     const collection = document.getElementById("note-collection").value.trim();
     const description = document.getElementById("note-description").value.trim();
     const submitButton = form.querySelector('button[type="submit"]');
+    const editingNoteId = notesState.editingNoteId;
 
     if (!title) {
         setCreateStatus("A title is required.", "error");
@@ -196,23 +223,34 @@ async function createNote(event) {
     }
 
     submitButton.disabled = true;
-    setCreateStatus("Creating note...");
+    setCreateStatus(editingNoteId ? "Saving changes..." : "Creating note...");
 
     try {
-        const response = await authenticatedFetch("/api/notes", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({title, subject, collection, description})
-        });
+        const response = await authenticatedFetch(
+            editingNoteId ? `/api/notes/${encodeURIComponent(editingNoteId)}` : "/api/notes",
+            {
+                method: editingNoteId ? "PATCH" : "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({title, subject, collection, description})
+            }
+        );
 
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Unable to create note.");
+        if (!response.ok) {
+            throw new Error(
+                data.error || (editingNoteId ? "Unable to update note." : "Unable to create note.")
+            );
+        }
 
+        notesState.editingNoteId = null;
         form.reset();
         showCreatePanel(false);
         await loadNotes();
     } catch (error) {
-        setCreateStatus(error.message || "Unable to create note.", "error");
+        setCreateStatus(
+            error.message || (editingNoteId ? "Unable to update note." : "Unable to create note."),
+            "error"
+        );
     } finally {
         submitButton.disabled = false;
     }
@@ -419,6 +457,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("my-notes-tab").addEventListener("click", () => setActiveView("my-notes"));
     document.getElementById("explore-tab").addEventListener("click", () => setActiveView("explore"));
     document.getElementById("new-note-btn").addEventListener("click", () => {
+        notesState.editingNoteId = null;
+        document.getElementById("create-note-form").reset();
+        document.getElementById("note-form-title").textContent = "Create a note";
+        document.getElementById("note-form-submit").textContent = "Create Note";
         setCreateStatus("");
         showCreatePanel(true);
     });
