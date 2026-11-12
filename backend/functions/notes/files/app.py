@@ -92,6 +92,7 @@ def lambda_handler(event, context):
     try:
         metadata = s3.head_object(Bucket=bucket_name, Key=key)
     except ClientError:
+        s3.delete_object(Bucket=bucket_name, Key=key)
         return response(400, {"error": "Uploaded file could not be verified"})
 
     actual_size = int(metadata.get("ContentLength") or 0)
@@ -125,20 +126,27 @@ def lambda_handler(event, context):
                 "SET #files = list_append(if_not_exists(#files, :empty), :new_file), "
                 "processingStatus = :uploaded, updatedAt = :updated"
             ),
-            ConditionExpression="attribute_exists(userId) AND attribute_exists(noteId)",
+            ConditionExpression=(
+                "attribute_exists(userId) AND attribute_exists(noteId) AND "
+                "(attribute_not_exists(#files) OR size(#files) < :max_files)"
+            ),
             ExpressionAttributeNames={"#files": "files"},
             ExpressionAttributeValues={
                 ":empty": [],
                 ":new_file": [file_record],
                 ":uploaded": "uploaded",
                 ":updated": now,
+                ":max_files": max_files_per_note,
             },
             ReturnValues="ALL_NEW",
         )
     except ClientError as error:
         if error.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
             s3.delete_object(Bucket=bucket_name, Key=key)
-            return response(404, {"error": "Note not found"})
+            return response(
+                409,
+                {"error": f"Unable to register file. The note may already have {max_files_per_note} source files"},
+            )
         raise
 
     return response(200, {"note": result.get("Attributes", {}), "file": file_record})
