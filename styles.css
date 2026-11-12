@@ -642,3 +642,128 @@ h3 {
         flex-wrap: wrap;
     }
 }
+
+
+.field-hint {
+    color: #98a2b3;
+    font-size: 0.78rem;
+    font-weight: 500;
+}
+
+.copy-toast {
+    position: fixed;
+    z-index: 9999;
+    pointer-events: none;
+    border-radius: 8px;
+    padding: 7px 10px;
+    background: #172033;
+    color: #fff;
+    box-shadow: 0 8px 24px rgba(16, 24, 40, 0.18);
+    font-size: 0.78rem;
+    font-weight: 800;
+    animation: copy-toast-fade 1.1s ease forwards;
+}
+
+@keyframes copy-toast-fade {
+    0% { opacity: 0; transform: translateY(3px); }
+    12%, 72% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-3px); }
+}
+
+.analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    margin: 18px 0 24px;
+}
+
+.metric-card {
+    display: grid;
+    gap: 8px;
+    padding: 20px;
+    border: 1px solid #e4e7ec;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 10px 32px rgba(16, 24, 40, 0.05);
+}
+
+.metric-card span {
+    color: #667085;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.metric-card strong {
+    color: #172033;
+    font-size: 1.75rem;
+    letter-spacing: -0.03em;
+}
+
+.analytics-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.analytics-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.analytics-list-row,
+.analytics-recent-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 0;
+    border-bottom: 1px solid #eef1f5;
+}
+
+.analytics-list-row:last-child,
+.analytics-recent-row:last-child {
+    border-bottom: 0;
+}
+
+.analytics-recent-row > div:first-child {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.analytics-recent-row > div:first-child span {
+    color: #667085;
+    font-size: 0.82rem;
+}
+
+.analytics-recent-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: flex-end;
+    color: #667085;
+    font-size: 0.78rem;
+}
+
+@media (max-width: 900px) {
+    .analytics-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 720px) {
+    .analytics-grid,
+    .analytics-detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .analytics-recent-row {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .analytics-recent-meta {
+        justify-content: flex-start;
+    }
+}
