@@ -560,9 +560,31 @@ function renderEmbeddedSource(file, index = 0) {
     }
 
     const isPowerPoint =
-        contentType === "application/vnd.ms-powerpoint" ||
         contentType === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
-        /\.(ppt|pptx)$/.test(filename);
+        filename.endsWith(".pptx");
+
+    if (isPowerPoint) {
+        return `
+            <section id="${sourceId}" class="source-viewer-card">
+                <div class="source-viewer-header">
+                    <div>
+                        <h3>${name}</h3>
+                        <p>PowerPoint source · read-only Notes App preview</p>
+                    </div>
+                    <a class="button button-text" href="${downloadUrl}">
+                        Download Original
+                    </a>
+                </div>
+                <div class="native-ppt-preview" data-pptx-preview data-file-id="${escapeHtml(file.fileId || "")}">
+                    <div class="ppt-preview-loading">Loading presentation preview...</div>
+                </div>
+            </section>
+        `;
+    }
+
+    const isLegacyPowerPoint =
+        contentType === "application/vnd.ms-powerpoint" ||
+        filename.endsWith(".ppt");
 
     const isLegacyExcel =
         contentType === "application/vnd.ms-excel" ||
@@ -573,7 +595,7 @@ function renderEmbeddedSource(file, index = 0) {
             <div class="source-viewer-header">
                 <div>
                     <h3>${name}</h3>
-                    <p>${isPowerPoint ? "PowerPoint source" : isLegacyExcel ? "Legacy Excel source" : "Source file"} · browser preview not available yet.</p>
+                    <p>${isLegacyPowerPoint ? "Legacy PowerPoint source" : isLegacyExcel ? "Legacy Excel source" : "Source file"} · browser preview not available yet.</p>
                 </div>
                 <a class="button button-text" href="${downloadUrl}">
                     Download Original
@@ -687,6 +709,63 @@ async function loadNativeExcelPreviews(noteId) {
             container.innerHTML = `
                 <p class="sheet-preview-error">
                     ${escapeHtml(error.message || "Unable to preview this workbook.")}
+                </p>
+            `;
+        }
+    }
+}
+
+
+function renderPresentationSlides(preview) {
+    const slides = preview.slides || [];
+    if (!slides.length) {
+        return '<p class="ppt-preview-error">No slide text was available to preview.</p>';
+    }
+
+    return `
+        <div class="ppt-preview-summary">
+            <strong>${slides.length} slide${slides.length === 1 ? "" : "s"} previewed</strong>
+            ${preview.truncated ? '<span>Preview limited to the first 60 slides.</span>' : ""}
+        </div>
+        <div class="ppt-slide-list">
+            ${slides.map((slide) => {
+                const body = (slide.text || [])
+                    .map((line) => `<li>${escapeHtml(line)}</li>`)
+                    .join("");
+
+                return `
+                    <article class="ppt-slide-card">
+                        <div class="ppt-slide-number">Slide ${Number(slide.number || 0)}</div>
+                        <div class="ppt-slide-content">
+                            <h4>${escapeHtml(slide.title || `Slide ${slide.number}`)}</h4>
+                            ${body ? `<ul>${body}</ul>` : '<p>No additional text on this slide.</p>'}
+                        </div>
+                    </article>
+                `;
+            }).join("")}
+        </div>
+    `;
+}
+
+async function loadNativePowerPointPreviews(noteId) {
+    const previews = document.querySelectorAll("[data-pptx-preview]");
+
+    for (const container of previews) {
+        const fileId = container.dataset.fileId;
+        if (!fileId) continue;
+
+        try {
+            const response = await fetch(
+                apiUrl(`/api/public/notes/${encodeURIComponent(noteId)}/files/${encodeURIComponent(fileId)}/preview`)
+            );
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "Unable to preview presentation.");
+
+            container.innerHTML = renderPresentationSlides(data.preview || {});
+        } catch (error) {
+            container.innerHTML = `
+                <p class="ppt-preview-error">
+                    ${escapeHtml(error.message || "Unable to preview this presentation.")}
                 </p>
             `;
         }
@@ -1666,7 +1745,10 @@ async function openPublicNote(noteId, updateUrl = true) {
         document.getElementById("public-status").hidden = true;
         detail.hidden = false;
         document.getElementById("share-public-note")?.addEventListener("click", (event) => sharePublicNote(noteId, event));
-        await loadNativeExcelPreviews(noteId);
+        await Promise.all([
+            loadNativeExcelPreviews(noteId),
+            loadNativePowerPointPreviews(noteId)
+        ]);
     } catch (error) {
         setPublicStatus(error.message || "Unable to open note.", true);
     }
