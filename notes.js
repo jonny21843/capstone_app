@@ -576,13 +576,25 @@ function validateSourceFile(file) {
         "image/png",
         "image/webp",
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.apple.pages",
+        "application/x-iwork-pages-sffpages",
+        "application/octet-stream"
     ]);
     const contentType = file.type || "application/octet-stream";
     const maxFileBytes = 20 * 1024 * 1024;
 
-    if (!allowedTypes.has(contentType)) {
-        return "Unsupported file type. Use PDF, JPG, PNG, WEBP, PPTX, or XLSX.";
+    const filename = (file.name || "").toLowerCase();
+    const isPages = filename.endsWith(".pages");
+    const pagesMimeAllowed = isPages && [
+        "application/vnd.apple.pages",
+        "application/x-iwork-pages-sffpages",
+        "application/octet-stream"
+    ].includes(contentType);
+
+    if (!allowedTypes.has(contentType) || (contentType === "application/octet-stream" && !pagesMimeAllowed)) {
+        return "Unsupported file type. Use PDF, JPG, PNG, WEBP, DOCX, PPTX, XLSX, or PAGES.";
     }
     if (file.size > maxFileBytes) {
         return "File is too large. Maximum size is 20 MB.";
