@@ -3,6 +3,8 @@ from decimal import Decimal
 import os
 import uuid
 from datetime import datetime, timezone
+from io import BytesIO
+from zipfile import BadZipFile, ZipFile
 
 import boto3
 from botocore.exceptions import ClientError
@@ -25,6 +27,19 @@ ALLOWED_TYPES = {
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }
 
+EXTENSIONS_BY_TYPE = {
+    "application/pdf": {".pdf"},
+    "image/jpeg": {".jpg", ".jpeg"},
+    "image/png": {".png"},
+    "image/webp": {".webp"},
+    "application/vnd.ms-powerpoint": {".ppt"},
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": {".pptx"},
+    "application/vnd.ms-excel": {".xls"},
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {".xlsx"},
+}
+
+OLE_SIGNATURE = bytes.fromhex("D0CF11E0A1B11AE1")
+
 
 def json_default(value):
     if isinstance(value, Decimal):
@@ -38,6 +53,58 @@ def response(status_code, body):
         "headers": {"Content-Type": "application/json"},
         "body": json.dumps(body, default=json_default),
     }
+
+
+
+def filename_extension(filename):
+    lowered = (filename or "").lower()
+    for extensions in EXTENSIONS_BY_TYPE.values():
+        for extension in extensions:
+            if lowered.endswith(extension):
+                return extension
+    return ""
+
+
+def filename_matches_type(filename, content_type):
+    extension = filename_extension(filename)
+    return bool(extension and extension in EXTENSIONS_BY_TYPE.get(content_type, set()))
+
+
+def validate_file_signature(key, content_type):
+    obj = s3.get_object(Bucket=bucket_name, Key=key)
+    data = obj["Body"].read()
+
+    if content_type == "application/pdf":
+        return data.startswith(b"%PDF-")
+
+    if content_type == "image/jpeg":
+        return data.startswith(b"\xff\xd8\xff")
+
+    if content_type == "image/png":
+        return data.startswith(b"\x89PNG\r\n\x1a\n")
+
+    if content_type == "image/webp":
+        return len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP"
+
+    if content_type in {"application/vnd.ms-powerpoint", "application/vnd.ms-excel"}:
+        return data.startswith(OLE_SIGNATURE)
+
+    if content_type in {
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }:
+        try:
+            with ZipFile(BytesIO(data)) as archive:
+                names = set(archive.namelist())
+        except BadZipFile:
+            return False
+
+        if content_type == "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+            return "[Content_Types].xml" in names and "ppt/presentation.xml" in names
+
+        return "[Content_Types].xml" in names and "xl/workbook.xml" in names
+
+    return False
 
 
 def current_user_id(event):
@@ -67,6 +134,14 @@ def register_file(user_id, note_id, payload):
     if not filename:
         return response(400, {"error": "filename is required"})
 
+    if content_type not in ALLOWED_TYPES:
+        s3.delete_object(Bucket=bucket_name, Key=key)
+        return response(400, {"error": "Unsupported uploaded file type"})
+
+    if not filename_matches_type(filename, content_type):
+        s3.delete_object(Bucket=bucket_name, Key=key)
+        return response(400, {"error": "Filename extension does not match the uploaded file type"})
+
     note = note_for_user(user_id, note_id)
     if not note:
         s3.delete_object(Bucket=bucket_name, Key=key)
@@ -91,10 +166,6 @@ def register_file(user_id, note_id, payload):
             {"error": f"A note can have at most {max_files_per_note} source files"},
         )
 
-    if content_type not in ALLOWED_TYPES:
-        s3.delete_object(Bucket=bucket_name, Key=key)
-        return response(400, {"error": "Unsupported uploaded file type"})
-
     try:
         metadata = s3.head_object(Bucket=bucket_name, Key=key)
     except ClientError:
@@ -114,6 +185,15 @@ def register_file(user_id, note_id, payload):
     if actual_type not in ALLOWED_TYPES or actual_type != content_type:
         s3.delete_object(Bucket=bucket_name, Key=key)
         return response(400, {"error": "Uploaded file type verification failed"})
+
+    try:
+        signature_valid = validate_file_signature(key, actual_type)
+    except ClientError:
+        signature_valid = False
+
+    if not signature_valid:
+        s3.delete_object(Bucket=bucket_name, Key=key)
+        return response(400, {"error": "Uploaded file contents do not match the declared file type"})
 
     now = datetime.now(timezone.utc).isoformat()
     file_record = {
@@ -204,6 +284,8 @@ def update_file_metadata(user_id, note_id, file_id, payload):
             return response(400, {"error": "filename is required"})
         if len(filename) > 240:
             return response(400, {"error": "filename must be 240 characters or fewer"})
+        if not filename_matches_type(filename, updated_files[index].get("contentType", "")):
+            return response(400, {"error": "Keep the original file type when renaming this source"})
         updated_files[index]["filename"] = filename
     elif action == "move":
         direction = (payload.get("direction") or "").strip().lower()
