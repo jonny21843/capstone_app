@@ -141,28 +141,55 @@ def lambda_handler(event, context):
         if not files:
             return response(400, {"error": "Upload at least one source file before publishing"})
 
-        blocked_files = [
-            item for item in files
-            if item.get("malwareScanStatus") not in (None, "NO_THREATS_FOUND")
-        ]
-        if blocked_files:
-            pending = any(item.get("malwareScanStatus") == "PENDING" for item in blocked_files)
-            message = (
-                "Source file security scan is still in progress. Try publishing again shortly."
-                if pending
-                else "One or more source files did not pass the security scan and cannot be published."
-            )
-            return response(409, {"error": message})
-
         author_display_name = public_author_for_user(username)
         if not author_display_name:
             return response(400, {"error": "Complete your first and last name before publishing"})
+
+        failed_files = [
+            item for item in files
+            if item.get("malwareScanStatus") not in (None, "PENDING", "NO_THREATS_FOUND")
+        ]
+        if failed_files:
+            return response(
+                409,
+                {"error": "One or more source files did not pass the security scan and cannot be published."},
+            )
+
+        pending_files = [
+            item for item in files
+            if item.get("malwareScanStatus") == "PENDING"
+        ]
+        if pending_files:
+            result = table.update_item(
+                Key={"userId": user_id, "noteId": note_id},
+                UpdateExpression=(
+                    "SET visibility = :private, publishPending = :pending, "
+                    "publicAuthor = :public_author, updatedAt = :updated "
+                    "REMOVE publishedAt, publishScanError"
+                ),
+                ExpressionAttributeValues={
+                    ":private": "private",
+                    ":pending": True,
+                    ":public_author": author_display_name,
+                    ":updated": now,
+                },
+                ReturnValues="ALL_NEW",
+            )
+            return response(
+                202,
+                {
+                    "note": result.get("Attributes", {}),
+                    "publishPending": True,
+                    "message": "Saved. Your source file is being security scanned and this note will publish automatically when the scan passes.",
+                },
+            )
 
         result = table.update_item(
             Key={"userId": user_id, "noteId": note_id},
             UpdateExpression=(
                 "SET visibility = :public, publishedAt = :published_at, "
-                "publicAuthor = :public_author, updatedAt = :updated"
+                "publicAuthor = :public_author, updatedAt = :updated "
+                "REMOVE publishPending, publishScanError"
             ),
             ExpressionAttributeValues={
                 ":public": "public",
@@ -175,7 +202,7 @@ def lambda_handler(event, context):
     else:
         result = table.update_item(
             Key={"userId": user_id, "noteId": note_id},
-            UpdateExpression="SET visibility = :private, updatedAt = :updated REMOVE publishedAt",
+            UpdateExpression="SET visibility = :private, updatedAt = :updated REMOVE publishedAt, publishPending, publishScanError",
             ExpressionAttributeValues={
                 ":private": "private",
                 ":updated": now,
