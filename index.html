@@ -115,7 +115,8 @@
 
                             <label>
                                 Topic
-                                <input id="note-collection" maxlength="120" placeholder="AWS Cloud Computing">
+                                <input id="note-collection" maxlength="120" list="topic-options" placeholder="AWS Cloud Computing">
+                                <datalist id="topic-options"></datalist>
                             </label>
                         </div>
 
@@ -262,28 +263,26 @@
             </div>
 
             <section class="card settings-profile-card">
-                <div class="card-heading">
+                <div class="settings-profile-heading">
                     <div>
                         <h3>Public profile</h3>
-                        <p>Your full last name stays private. Public notes show only your first name and last initial.</p>
-                    </div>
-                </div>
-
-                <form id="settings-profile-form" class="note-form">
-                    <div class="form-grid">
-                        <label>
-                            First name
-                            <input id="settings-first-name" maxlength="60" autocomplete="given-name" required>
-                        </label>
-                        <label>
-                            Last name
-                            <input id="settings-last-name" maxlength="60" autocomplete="family-name" required>
-                        </label>
+                        <p>Your public notes show only your first name and last initial.</p>
                     </div>
                     <p id="settings-public-preview" class="profile-preview"></p>
-                    <div class="form-actions">
+                </div>
+
+                <form id="settings-profile-form" class="settings-profile-form">
+                    <label>
+                        First name
+                        <input id="settings-first-name" maxlength="60" autocomplete="given-name" required>
+                    </label>
+                    <label>
+                        Last name
+                        <input id="settings-last-name" maxlength="60" autocomplete="family-name" required>
+                    </label>
+                    <div class="settings-profile-action">
                         <span id="settings-profile-status" class="status-text" aria-live="polite"></span>
-                        <button id="settings-profile-submit" type="submit" class="button button-primary">Save Profile</button>
+                        <button id="settings-profile-submit" type="submit" class="button button-primary">Save</button>
                     </div>
                 </form>
             </section>
