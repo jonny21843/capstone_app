@@ -607,6 +607,7 @@ Resources:
           NOTES_TABLE: !Ref NotesTable
           SECURITY_TABLE: !Ref UserSecurityTable
           COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
+          ADMIN_EMAILS: !Ref AdminEmails
           SES_FROM_EMAIL: "StudyGrounds <notifications@joinstudygrounds.com>"
           APP_URL: "https://joinstudygrounds.com"
       Policies:
