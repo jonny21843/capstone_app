@@ -94,12 +94,28 @@
                         <div class="form-grid">
                             <label>
                                 Subject
-                                <input id="note-subject" maxlength="100" placeholder="AWS">
+                                <input id="note-subject" maxlength="100" list="subject-options" placeholder="Technology">
+                                <datalist id="subject-options">
+                                    <option value="Technology">
+                                    <option value="Medicine & Health">
+                                    <option value="Engineering">
+                                    <option value="Science">
+                                    <option value="Space & Astronomy">
+                                    <option value="Psychology">
+                                    <option value="Mathematics">
+                                    <option value="Business & Finance">
+                                    <option value="Law & Government">
+                                    <option value="Education">
+                                    <option value="History">
+                                    <option value="Arts & Humanities">
+                                    <option value="Social Sciences">
+                                    <option value="Languages">
+                                </datalist>
                             </label>
 
                             <label>
-                                Collection
-                                <input id="note-collection" maxlength="120" placeholder="Solutions Architect Associate">
+                                Topic
+                                <input id="note-collection" maxlength="120" placeholder="AWS Cloud Computing">
                             </label>
                         </div>
 
@@ -135,13 +151,13 @@
                 <div>
                     <p class="eyebrow">Community library</p>
                     <h2>Explore Notes</h2>
-                    <p class="subtitle">Search public notes by title, subject, collection, or description keywords.</p>
+                    <p class="subtitle">Search public notes by title, broad subject, topic, or description keywords.</p>
                 </div>
             </div>
 
             <section class="explore-controls">
                 <div class="explore-search-line">
-                    <input id="public-search" type="search" placeholder="Search titles, subjects, collections, or keywords...">
+                    <input id="public-search" type="search" placeholder="Search titles, subjects, topics, or keywords...">
                     <button id="public-search-btn" class="button button-primary" type="button">Search</button>
                 </div>
 
@@ -150,8 +166,8 @@
                         <select id="public-subject" aria-label="Filter by subject">
                             <option value="">All subjects</option>
                         </select>
-                        <select id="public-collection" aria-label="Filter by collection">
-                            <option value="">All collections</option>
+                        <select id="public-collection" aria-label="Filter by topic">
+                            <option value="">All topics</option>
                         </select>
                         <select id="public-sort" aria-label="Sort public notes">
                             <option value="newest">Newest</option>
@@ -224,7 +240,7 @@
                         <div id="analytics-subjects" class="analytics-list"></div>
                     </section>
                     <section class="card">
-                        <h3>Top collections</h3>
+                        <h3>Top topics</h3>
                         <div id="analytics-collections" class="analytics-list"></div>
                     </section>
                 </div>
@@ -245,7 +261,7 @@
                 </div>
             </div>
 
-            <section class="card">
+            <section class="card settings-profile-card">
                 <div class="card-heading">
                     <div>
                         <h3>Public profile</h3>
