@@ -4,6 +4,8 @@ from io import BytesIO
 import os
 from datetime import date, datetime, time
 from zipfile import ZipFile, BadZipFile
+import re
+import xml.etree.ElementTree as ET
 
 import boto3
 from boto3.dynamodb.conditions import Key
@@ -27,6 +29,8 @@ MAX_PREVIEW_ROWS = 100
 MAX_PREVIEW_COLUMNS = 30
 MAX_XLSX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
 MAX_XLSX_ZIP_ENTRIES = 5000
+MAX_PPTX_SLIDES = 60
+MAX_PPTX_TEXT_PER_SLIDE = 12000
 
 
 def json_default(value):
@@ -173,6 +177,96 @@ def preview_xlsx(note, file_id):
     )
 
 
+
+def preview_pptx(note, file_id):
+    file_record = next(
+        (
+            item
+            for item in (note.get("files") or [])
+            if item.get("fileId") == file_id
+        ),
+        None,
+    )
+    if not file_record:
+        return response(404, {"error": "Source file not found"})
+
+    filename = (file_record.get("filename") or "").lower()
+    content_type = (file_record.get("contentType") or "").lower()
+    is_pptx = (
+        filename.endswith(".pptx")
+        or content_type
+        == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    )
+    if not is_pptx:
+        return response(400, {"error": "Native preview is currently available for PPTX files only"})
+
+    obj = s3.get_object(Bucket=bucket_name, Key=file_record["key"])
+    data = obj["Body"].read()
+
+    try:
+        with ZipFile(BytesIO(data)) as archive:
+            entries = archive.infolist()
+            if len(entries) > MAX_XLSX_ZIP_ENTRIES:
+                raise ValueError("Presentation contains too many internal files")
+
+            total_size = sum(item.file_size for item in entries)
+            if total_size > MAX_XLSX_UNCOMPRESSED_BYTES:
+                raise ValueError("Presentation expands beyond the preview safety limit")
+
+            slide_names = [
+                name
+                for name in archive.namelist()
+                if re.fullmatch(r"ppt/slides/slide\d+\.xml", name)
+            ]
+            slide_names.sort(
+                key=lambda name: int(re.search(r"slide(\d+)\.xml$", name).group(1))
+            )
+
+            slides = []
+            for slide_number, slide_name in enumerate(slide_names[:MAX_PPTX_SLIDES], start=1):
+                root = ET.fromstring(archive.read(slide_name))
+                texts = []
+                for element in root.iter():
+                    if element.tag.endswith("}t") and element.text:
+                        text = element.text.strip()
+                        if text:
+                            texts.append(text)
+
+                joined = "\n".join(texts)
+                if len(joined) > MAX_PPTX_TEXT_PER_SLIDE:
+                    joined = joined[: MAX_PPTX_TEXT_PER_SLIDE - 3] + "..."
+
+                title = texts[0] if texts else f"Slide {slide_number}"
+                body = texts[1:] if len(texts) > 1 else []
+
+                slides.append(
+                    {
+                        "number": slide_number,
+                        "title": title[:300],
+                        "text": body,
+                        "allText": joined,
+                    }
+                )
+
+    except BadZipFile as error:
+        raise ValueError("Presentation is not a valid PPTX file") from error
+
+    return response(
+        200,
+        {
+            "preview": {
+                "type": "pptx",
+                "filename": file_record.get("filename"),
+                "slides": slides,
+                "slideCount": len(slide_names),
+                "previewedSlideCount": len(slides),
+                "truncated": len(slide_names) > MAX_PPTX_SLIDES,
+                "limits": {"slides": MAX_PPTX_SLIDES},
+            }
+        },
+    )
+
+
 def lambda_handler(event, context):
     params = event.get("pathParameters") or {}
     note_id = params.get("noteId")
@@ -185,7 +279,25 @@ def lambda_handler(event, context):
 
     file_id = params.get("fileId")
     if file_id:
+        file_record = next(
+            (
+                item
+                for item in (note.get("files") or [])
+                if item.get("fileId") == file_id
+            ),
+            None,
+        )
+        filename = ((file_record or {}).get("filename") or "").lower()
+        content_type = ((file_record or {}).get("contentType") or "").lower()
+
         try:
+            if (
+                filename.endswith(".pptx")
+                or content_type
+                == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            ):
+                return preview_pptx(note, file_id)
+
             return preview_xlsx(note, file_id)
         except ValueError as error:
             return response(400, {"error": str(error)})
@@ -193,7 +305,7 @@ def lambda_handler(event, context):
             return response(
                 500,
                 {
-                    "error": "Unable to build workbook preview",
+                    "error": "Unable to build source preview",
                     "detail": f"{type(error).__name__}: {error}",
                 },
             )
