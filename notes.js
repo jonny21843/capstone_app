@@ -834,7 +834,7 @@ function renderNotes() {
                                 <button class="button button-mini" type="button" data-move-source="down" data-file-id="${escapeHtml(file.fileId || "")}" title="Move down">↓</button>
                                 <button class="button button-mini" type="button" data-rename-source data-file-id="${escapeHtml(file.fileId || "")}">Rename</button>
                                 <button class="button button-mini" type="button" data-replace-source data-file-id="${escapeHtml(file.fileId || "")}">Replace</button>
-                                <button class="button button-danger-text" type="button" data-remove-source data-file-id="${escapeHtml(file.fileId || "")}">Remove</button>
+                                <button class="button button-danger-text" type="button" data-remove-source data-file-id="${escapeHtml(file.fileId || "")}" ${published ? 'disabled title="Unpublish this note before removing source files."' : ""}>Remove</button>
                             </div>
                         </div>
                     `).join("")}
@@ -1253,6 +1253,11 @@ async function moveSourceFile(note, fileId, direction) {
 }
 
 async function deleteSourceFile(note, fileId) {
+    if (note.visibility === "public") {
+        alert("Unpublish this note before removing a source file.");
+        return;
+    }
+
     const file = (note.files || []).find((item) => item.fileId === fileId);
     const filename = file?.filename || "this source file";
 
