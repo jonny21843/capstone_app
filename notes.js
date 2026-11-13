@@ -1,3 +1,77 @@
+const CURATED_SUBJECTS = [
+    "Technology",
+    "Medicine & Health",
+    "Engineering",
+    "Science",
+    "Space & Astronomy",
+    "Psychology",
+    "Mathematics",
+    "Business & Finance",
+    "Law & Government",
+    "Education",
+    "History",
+    "Arts & Humanities",
+    "Social Sciences",
+    "Languages"
+];
+
+let publicTaxonomy = {
+    subjects: [...CURATED_SUBJECTS],
+    topics: [],
+    subjectTopics: {}
+};
+
+function setDatalistOptions(id, values) {
+    const list = document.getElementById(id);
+    if (!list) return;
+
+    const unique = [...new Set((values || []).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, undefined, {sensitivity: "base"}));
+
+    list.innerHTML = unique
+        .map((value) => `<option value="${escapeHtml(value)}"></option>`)
+        .join("");
+}
+
+function refreshTopicSuggestions() {
+    const subject = document.getElementById("note-subject")?.value.trim() || "";
+    const subjectKey = Object.keys(publicTaxonomy.subjectTopics || {}).find(
+        (key) => key.toLowerCase() === subject.toLowerCase()
+    );
+
+    const topics = subjectKey
+        ? publicTaxonomy.subjectTopics[subjectKey]
+        : publicTaxonomy.topics;
+
+    setDatalistOptions("topic-options", topics);
+}
+
+function applyPublicTaxonomy(data) {
+    const subjects = [...CURATED_SUBJECTS, ...(data.subjects || [])];
+    publicTaxonomy = {
+        subjects: [...new Set(subjects)],
+        topics: data.collections || [],
+        subjectTopics: data.subjectTopics || {}
+    };
+
+    setDatalistOptions("subject-options", publicTaxonomy.subjects);
+    refreshTopicSuggestions();
+}
+
+async function loadPublicTaxonomy() {
+    try {
+        const url = new URL(apiUrl("/api/public/notes"));
+        url.searchParams.set("page", "1");
+        url.searchParams.set("pageSize", "1");
+        const response = await fetch(url);
+        const data = await response.json();
+        if (response.ok) applyPublicTaxonomy(data);
+    } catch (error) {
+        console.error("Unable to load note taxonomy suggestions:", error);
+        setDatalistOptions("subject-options", CURATED_SUBJECTS);
+    }
+}
+
 const notesState = {
     notes: [],
     uploadNoteId: null,
@@ -1069,6 +1143,7 @@ async function loadPublicNotes() {
         if (!response.ok) throw new Error(data.error || "Unable to load public notes.");
 
         const notes = data.notes || [];
+        applyPublicTaxonomy(data);
         const subjectSelect = document.getElementById("public-subject");
         const currentSubject = subjectSelect.value;
         const collectionSelect = document.getElementById("public-collection");
@@ -1250,6 +1325,7 @@ async function openPublicNote(noteId, updateUrl = true) {
 
 document.addEventListener("DOMContentLoaded", async () => {
     renderSignedInState();
+    await loadPublicTaxonomy();
 
     document.getElementById("hero-sign-in-btn").addEventListener("click", signIn);
     document.getElementById("my-notes-tab").addEventListener("click", () => setActiveView("my-notes"));
@@ -1276,6 +1352,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("settings-profile-form").addEventListener("submit", saveSettingsProfile);
     document.getElementById("create-note-form").addEventListener("submit", createNote);
     document.getElementById("note-upload-input").addEventListener("change", handleUploadSelection);
+    document.getElementById("note-subject").addEventListener("input", refreshTopicSuggestions);
+    document.getElementById("note-subject").addEventListener("change", refreshTopicSuggestions);
     document.getElementById("public-search-btn").addEventListener("click", () => {
         notesState.publicPage = 1;
         loadPublicNotes();
