@@ -28,8 +28,10 @@ ALLOWED_TYPES = {
     "image/webp",
     "application/vnd.ms-powerpoint",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }
-ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".webp", ".ppt", ".pptx"}
+ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".webp", ".ppt", ".pptx", ".xls", ".xlsx"}
 
 
 def response(status_code, body):
@@ -105,13 +107,13 @@ def lambda_handler(event, context):
     if not raw_filename or file_extension(raw_filename) not in ALLOWED_EXTENSIONS:
         return response(
             400,
-            {"error": "Only PDF, JPG, PNG, WEBP, PPT, and PPTX files are allowed"},
+            {"error": "Only PDF, JPG, PNG, WEBP, PPT, PPTX, XLS, and XLSX files are allowed"},
         )
 
     if content_type not in ALLOWED_TYPES:
         return response(
             400,
-            {"error": "Unsupported file type. Use PDF, JPG, PNG, WEBP, PPT, or PPTX"},
+            {"error": "Unsupported file type. Use PDF, JPG, PNG, WEBP, PPT, PPTX, XLS, or XLSX"},
         )
 
     if file_size <= 0:
