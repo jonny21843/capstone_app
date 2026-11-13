@@ -4,8 +4,8 @@ window.BUCKET_NAME = "S3 Bucket Name";
 const APP_CONFIG = {
     cognitoDomain: "https://us-east-2sz3qwdfwv.auth.us-east-2.amazoncognito.com",
     cognitoClientId: "3t79knetd0pdav5jsso0osfb1e",
-    cognitoRedirectUri: "http://localhost:8080/auth/callback.html",
-    cognitoLogoutUri: "http://localhost:8080/",
+    cognitoRedirectUri: `${window.location.origin}/auth/callback.html`,
+    cognitoLogoutUri: `${window.location.origin}/`,
     apiBaseUrl: "https://nxa9uz2cv0.execute-api.us-east-2.amazonaws.com",
     adminEmails: ["jonathan.feagans@outlook.com"]
 };
