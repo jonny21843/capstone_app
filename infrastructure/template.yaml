@@ -527,9 +527,21 @@ Resources:
       Environment:
         Variables:
           NOTES_TABLE: !Ref NotesTable
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
+          SES_FROM_EMAIL: "StudyGrounds <notifications@joinstudygrounds.com>"
+          APP_URL: "https://joinstudygrounds.com"
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref NotesTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+              Resource: !Sub "arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}"
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/joinstudygrounds.com"
       Events:
         GuardDutyScanResult:
           Type: EventBridgeRule
