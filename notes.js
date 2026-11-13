@@ -1203,6 +1203,34 @@ function setPublicStatus(message, isError = false) {
     status.style.color = isError ? "#b42318" : "";
 }
 
+function refreshExploreTopicFilter() {
+    const subjectSelect = document.getElementById("public-subject");
+    const topicSelect = document.getElementById("public-collection");
+    if (!subjectSelect || !topicSelect) return;
+
+    const selectedSubject = subjectSelect.value;
+    const currentTopic = topicSelect.value;
+
+    let topics = publicTaxonomy.topics || [];
+    if (selectedSubject) {
+        const subjectKey = Object.keys(publicTaxonomy.subjectTopics || {}).find(
+            (key) => key.toLowerCase() === selectedSubject.toLowerCase()
+        );
+        topics = subjectKey ? publicTaxonomy.subjectTopics[subjectKey] : [];
+    }
+
+    const normalizedTopics = normalizeOptions(topics);
+    topicSelect.innerHTML = ['<option value="">All topics</option>']
+        .concat(
+            normalizedTopics.map(
+                (item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`
+            )
+        )
+        .join("");
+
+    topicSelect.value = normalizedTopics.includes(currentTopic) ? currentTopic : "";
+}
+
 function renderActivePublicFilters(query, subject, collection, sort) {
     const container = document.getElementById("public-active-filters");
     const items = [];
@@ -1270,16 +1298,7 @@ async function loadPublicNotes() {
             subjectSelect.value = currentSubject;
         }
 
-        if (collectionSelect.options.length <= 1 || currentCollection === "") {
-            const collectionOptions = ['<option value="">All topics</option>']
-                .concat(
-                    (data.collections || []).map(
-                        (item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`
-                    )
-                );
-            collectionSelect.innerHTML = collectionOptions.join("");
-            collectionSelect.value = currentCollection;
-        }
+        refreshExploreTopicFilter();
 
         notesState.publicPage = data.page || 1;
         notesState.publicTotalPages = data.totalPages || 1;
@@ -1479,6 +1498,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     document.getElementById("public-subject").addEventListener("change", () => {
         notesState.publicPage = 1;
+        refreshExploreTopicFilter();
         loadPublicNotes();
     });
     document.getElementById("public-collection").addEventListener("change", () => {
