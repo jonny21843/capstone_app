@@ -304,10 +304,7 @@ def lambda_handler(event, context):
         except Exception as error:
             return response(
                 500,
-                {
-                    "error": "Unable to build source preview",
-                    "detail": f"{type(error).__name__}: {error}",
-                },
+                {"error": "Unable to build source preview"},
             )
 
     try:
