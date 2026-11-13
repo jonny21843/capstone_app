@@ -473,16 +473,14 @@ function validateSourceFile(file) {
         "image/jpeg",
         "image/png",
         "image/webp",
-        "application/vnd.ms-powerpoint",
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "application/vnd.ms-excel",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     ]);
     const contentType = file.type || "application/octet-stream";
     const maxFileBytes = 20 * 1024 * 1024;
 
     if (!allowedTypes.has(contentType)) {
-        return "Unsupported file type. Use PDF, JPG, PNG, WEBP, PPT, PPTX, XLS, or XLSX.";
+        return "Unsupported file type. Use PDF, JPG, PNG, WEBP, PPTX, or XLSX.";
     }
     if (file.size > maxFileBytes) {
         return "File is too large. Maximum size is 20 MB.";
@@ -1752,6 +1750,10 @@ async function openPublicNote(noteId, updateUrl = true) {
             loadNativePowerPointPreviews(noteId)
         ]);
     } catch (error) {
+        detail.hidden = true;
+        content.innerHTML = "";
+        document.querySelector(".explore-controls")?.removeAttribute("hidden");
+        grid.hidden = false;
         setPublicStatus(error.message || "Unable to open note.", true);
     }
 }
