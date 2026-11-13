@@ -10,7 +10,9 @@ import boto3
 from botocore.exceptions import ClientError
 
 
-table = boto3.resource("dynamodb").Table(os.environ["NOTES_TABLE"])
+dynamodb = boto3.resource("dynamodb")
+table = dynamodb.Table(os.environ["NOTES_TABLE"])
+security_table = dynamodb.Table(os.environ["SECURITY_TABLE"])
 bucket_name = os.environ["NOTES_BUCKET"]
 max_file_bytes = int(os.environ.get("MAX_FILE_BYTES", str(20 * 1024 * 1024)))
 max_files_per_note = int(os.environ.get("MAX_FILES_PER_NOTE", "10"))
@@ -135,8 +137,37 @@ def note_for_user(user_id, note_id):
     return table.get_item(Key={"userId": user_id, "noteId": note_id}).get("Item")
 
 
+def upload_block_reason(user_id):
+    profile = security_table.get_item(
+        Key={"pk": f"USER#{user_id}", "sk": "PROFILE"}
+    ).get("Item") or {}
+
+    if profile.get("uploadBlocked"):
+        return "Uploads are disabled for this account pending a security review."
+
+    blocked_until = profile.get("uploadBlockedUntil")
+    if blocked_until:
+        try:
+            until = datetime.fromisoformat(str(blocked_until).replace("Z", "+00:00"))
+            if until > datetime.now(timezone.utc):
+                return "Uploads are temporarily paused after a security scan detected malware."
+        except (TypeError, ValueError):
+            return "Uploads are temporarily paused pending a security review."
+
+    return None
+
+
 def register_file(user_id, note_id, payload):
+    block_reason = upload_block_reason(user_id)
     key = (payload.get("key") or "").strip()
+
+    if block_reason:
+        if key:
+            try:
+                s3.delete_object(Bucket=bucket_name, Key=key)
+            except ClientError:
+                pass
+        return response(423, {"error": block_reason, "code": "UPLOAD_SECURITY_BLOCK"})
     filename = (payload.get("filename") or "").strip()
     content_type = (payload.get("contentType") or "").strip().lower()
     replace_file_id = (payload.get("replaceFileId") or "").strip()
