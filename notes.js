@@ -468,13 +468,15 @@ function validateSourceFile(file) {
         "image/png",
         "image/webp",
         "application/vnd.ms-powerpoint",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     ]);
     const contentType = file.type || "application/octet-stream";
     const maxFileBytes = 20 * 1024 * 1024;
 
     if (!allowedTypes.has(contentType)) {
-        return "Unsupported file type. Use PDF, JPG, PNG, WEBP, PPT, or PPTX.";
+        return "Unsupported file type. Use PDF, JPG, PNG, WEBP, PPT, PPTX, XLS, or XLSX.";
     }
     if (file.size > maxFileBytes) {
         return "File is too large. Maximum size is 20 MB.";
