@@ -149,9 +149,9 @@ def serialize_incident(user_id, incident):
     return {
         "incidentId": incident.get("incidentId"),
         "noteId": incident.get("noteId"),
-        "noteTitle": metadata["noteTitle"],
+        "noteTitle": metadata["noteTitle"] or incident.get("noteTitle") or None,
         "fileId": metadata["fileId"],
-        "filename": metadata["filename"],
+        "filename": metadata["filename"] or incident.get("filename") or None,
         "detectedAt": incident.get("detectedAt"),
         "scanResultStatus": incident.get("scanResultStatus"),
         "forgiven": bool(incident.get("forgiven")),
