@@ -48,6 +48,25 @@ Resources:
       SSESpecification:
         SSEEnabled: true
 
+  UserSecurityTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+
   NotesBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -374,11 +393,14 @@ Resources:
         Variables:
           NOTES_TABLE: !Ref NotesTable
           NOTES_BUCKET: !Ref NotesBucket
+          SECURITY_TABLE: !Ref UserSecurityTable
           MAX_FILE_BYTES: 20971520
           MAX_FILES_PER_NOTE: 10
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref NotesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref UserSecurityTable
         - S3WritePolicy:
             BucketName: !Ref NotesBucket
       Events:
@@ -494,9 +516,12 @@ Resources:
           NOTES_TABLE: !Ref NotesTable
           NOTES_BUCKET: !Ref NotesBucket
           COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
+          SECURITY_TABLE: !Ref UserSecurityTable
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref NotesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref UserSecurityTable
         - Statement:
             - Effect: Allow
               Action:
@@ -527,16 +552,20 @@ Resources:
       Environment:
         Variables:
           NOTES_TABLE: !Ref NotesTable
+          SECURITY_TABLE: !Ref UserSecurityTable
           COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
           SES_FROM_EMAIL: "StudyGrounds <notifications@joinstudygrounds.com>"
           APP_URL: "https://joinstudygrounds.com"
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref NotesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserSecurityTable
         - Statement:
             - Effect: Allow
               Action:
                 - cognito-idp:ListUsers
+                - cognito-idp:AdminDisableUser
               Resource: !Sub "arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}"
             - Effect: Allow
               Action:
