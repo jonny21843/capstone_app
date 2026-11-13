@@ -55,9 +55,19 @@ def get_public_note(note_id):
     )
     notes = result.get("Items", [])
     note = notes[0] if notes else None
-    if not note or note.get("visibility") != "public" or not note.get("files"):
+    if not note or note.get("visibility") != "public":
         return None
-    return note
+
+    safe_files = [
+        item for item in (note.get("files") or [])
+        if item.get("malwareScanStatus") in (None, "NO_THREATS_FOUND")
+    ]
+    if not safe_files:
+        return None
+
+    safe_note = dict(note)
+    safe_note["files"] = safe_files
+    return safe_note
 
 
 def safe_cell_value(value):
@@ -120,7 +130,12 @@ def preview_xlsx(note, file_id):
     )
 
     sheets = []
-    sheet_names = workbook.sheetnames[:MAX_PREVIEW_SHEETS]
+    visible_sheet_names = [
+        sheet.title
+        for sheet in workbook.worksheets
+        if sheet.sheet_state == "visible"
+    ]
+    sheet_names = visible_sheet_names[:MAX_PREVIEW_SHEETS]
 
     for sheet_name in sheet_names:
         sheet = workbook[sheet_name]
@@ -165,8 +180,9 @@ def preview_xlsx(note, file_id):
             "preview": {
                 "filename": file_record.get("filename"),
                 "sheets": sheets,
-                "sheetCount": len(workbook.sheetnames),
+                "sheetCount": len(visible_sheet_names),
                 "previewedSheetCount": len(sheet_names),
+                "hiddenSheetsExcluded": len(workbook.sheetnames) - len(visible_sheet_names),
                 "limits": {
                     "rowsPerSheet": MAX_PREVIEW_ROWS,
                     "columnsPerSheet": MAX_PREVIEW_COLUMNS,
