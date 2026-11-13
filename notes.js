@@ -21,28 +21,66 @@ let publicTaxonomy = {
     subjectTopics: {}
 };
 
+let personalTaxonomy = {
+    subjects: [],
+    topics: [],
+    subjectTopics: {}
+};
+
 function normalizeOptions(values) {
     return [...new Set((values || []).filter(Boolean))]
         .sort((a, b) => a.localeCompare(b, undefined, {sensitivity: "base"}));
 }
 
+function mergedCreationTaxonomy() {
+    const subjectTopics = {};
+
+    for (const taxonomy of [publicTaxonomy, personalTaxonomy]) {
+        for (const [subject, topics] of Object.entries(taxonomy.subjectTopics || {})) {
+            const existingKey = Object.keys(subjectTopics).find(
+                (key) => key.toLowerCase() === subject.toLowerCase()
+            );
+            const key = existingKey || subject;
+            subjectTopics[key] = normalizeOptions([
+                ...(subjectTopics[key] || []),
+                ...(topics || [])
+            ]);
+        }
+    }
+
+    return {
+        subjects: normalizeOptions([
+            ...CURATED_SUBJECTS,
+            ...(publicTaxonomy.subjects || []),
+            ...(personalTaxonomy.subjects || [])
+        ]),
+        topics: normalizeOptions([
+            ...(publicTaxonomy.topics || []),
+            ...(personalTaxonomy.topics || [])
+        ]),
+        subjectTopics
+    };
+}
+
 function getSearchSelectValues(type) {
+    const taxonomy = mergedCreationTaxonomy();
+
     if (type === "subject") {
-        return publicTaxonomy.subjects;
+        return taxonomy.subjects;
     }
 
     const subject = document.getElementById("note-subject")?.value.trim() || "";
 
     if (!subject) {
-        return publicTaxonomy.topics;
+        return taxonomy.topics;
     }
 
-    const subjectKey = Object.keys(publicTaxonomy.subjectTopics || {}).find(
+    const subjectKey = Object.keys(taxonomy.subjectTopics || {}).find(
         (key) => key.toLowerCase() === subject.toLowerCase()
     );
 
     return subjectKey
-        ? publicTaxonomy.subjectTopics[subjectKey]
+        ? taxonomy.subjectTopics[subjectKey]
         : [];
 }
 
@@ -1330,6 +1368,14 @@ async function loadNotes() {
 
         const data = await response.json();
         notesState.notes = data.notes || [];
+        personalTaxonomy = {
+            subjects: normalizeOptions(data.taxonomy?.subjects || []),
+            topics: normalizeOptions(data.taxonomy?.collections || []),
+            subjectTopics: data.taxonomy?.subjectTopics || {}
+        };
+        document.querySelectorAll(".search-select").forEach((container) => {
+            renderSearchSelectOptions(container, false);
+        });
         notifyScanStateChanges(notesState.notes);
         renderNotes();
 
