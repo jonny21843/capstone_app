@@ -154,6 +154,9 @@ def serialize_incident(user_id, incident):
         "filename": metadata["filename"],
         "detectedAt": incident.get("detectedAt"),
         "scanResultStatus": incident.get("scanResultStatus"),
+        "forgiven": bool(incident.get("forgiven")),
+        "forgivenAt": incident.get("forgivenAt"),
+        "forgivenBy": incident.get("forgivenBy"),
     }
 
 
@@ -241,14 +244,27 @@ def restore_access(user_id):
     )
 
 
-def forgive_strikes(user_id):
+def forgive_strikes(user_id, admin_email):
     profile, incidents, _ = query_user_security(user_id)
+    now = datetime.now(timezone.utc).isoformat()
+
     for incident in incidents:
-        security_table.delete_item(
+        if incident.get("forgiven"):
+            continue
+        security_table.update_item(
             Key={
                 "pk": f"USER#{user_id}",
                 "sk": incident["sk"],
-            }
+            },
+            UpdateExpression=(
+                "SET forgiven = :forgiven, forgivenAt = :forgiven_at, "
+                "forgivenBy = :forgiven_by"
+            ),
+            ExpressionAttributeValues={
+                ":forgiven": True,
+                ":forgiven_at": now,
+                ":forgiven_by": admin_email,
+            },
         )
 
     if profile:
@@ -261,11 +277,7 @@ def forgive_strikes(user_id):
                 "reviewRequired": False,
                 "accountSecurityStatus": "ACTIVE",
             },
-            remove_names=[
-                "uploadBlockedUntil",
-                "lastMalwareAt",
-                "lastIncidentId",
-            ],
+            remove_names=["uploadBlockedUntil"],
         )
 
 
@@ -372,7 +384,7 @@ def handle_action(event, user_id):
         if action == "restore_access":
             restore_access(user_id)
         elif action == "forgive_strikes":
-            forgive_strikes(user_id)
+            forgive_strikes(user_id, admin_email)
         elif action == "reenable_account":
             set_cognito_enabled(user_id, True)
             restore_access(user_id)
