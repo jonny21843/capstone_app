@@ -160,19 +160,19 @@ def upload_block_reason(user_id):
 def register_file(user_id, note_id, payload):
     block_reason = upload_block_reason(user_id)
     key = (payload.get("key") or "").strip()
+    expected_prefix = f"users/{user_id}/notes/{note_id}/original/"
 
     if block_reason:
-        if key:
+        if key.startswith(expected_prefix):
             try:
                 s3.delete_object(Bucket=bucket_name, Key=key)
             except ClientError:
                 pass
         return response(423, {"error": block_reason, "code": "UPLOAD_SECURITY_BLOCK"})
+
     filename = (payload.get("filename") or "").strip()
     content_type = (payload.get("contentType") or "").strip().lower()
     replace_file_id = (payload.get("replaceFileId") or "").strip()
-
-    expected_prefix = f"users/{user_id}/notes/{note_id}/original/"
     if not key.startswith(expected_prefix):
         return response(400, {"error": "Invalid file key for this note"})
 
