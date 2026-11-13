@@ -45,6 +45,7 @@
             <button id="explore-tab" class="nav-button" type="button">Explore</button>
             <button id="settings-tab" class="nav-button" type="button" hidden>Settings</button>
             <button id="analytics-tab" class="nav-button" type="button" hidden>Analytics</button>
+            <button id="security-tab" class="nav-button" type="button" hidden>Security</button>
         </nav>
 
         <section id="my-notes-view">
@@ -262,6 +263,69 @@
                 <section class="card">
                     <h3>Recently published</h3>
                     <div id="analytics-recent" class="analytics-list"></div>
+                </section>
+            </section>
+        </section>
+
+        <section id="security-view" hidden>
+            <div class="dashboard-toolbar">
+                <div>
+                    <p class="eyebrow">Admin</p>
+                    <h2>Security</h2>
+                    <p class="subtitle">Review malware incidents, account restrictions, and security actions.</p>
+                </div>
+                <button id="refresh-security" class="button button-secondary" type="button">Refresh</button>
+            </div>
+
+            <section id="security-status" class="status-card" aria-live="polite">Loading security records...</section>
+
+            <section id="security-content" hidden>
+                <div class="analytics-grid security-metrics">
+                    <article class="metric-card"><span>Needs review</span><strong id="security-metric-review">0</strong></article>
+                    <article class="metric-card"><span>Restricted</span><strong id="security-metric-restricted">0</strong></article>
+                    <article class="metric-card"><span>Disabled</span><strong id="security-metric-disabled">0</strong></article>
+                    <article class="metric-card"><span>30-day strikes</span><strong id="security-metric-strikes">0</strong></article>
+                </div>
+
+                <section class="card">
+                    <div class="security-section-heading">
+                        <div>
+                            <h3>Accounts</h3>
+                            <p class="note-description">Only accounts with a StudyGrounds security record appear here.</p>
+                        </div>
+                    </div>
+                    <div id="security-users" class="security-user-list"></div>
+                </section>
+
+                <section id="security-user-detail" class="card" hidden>
+                    <div class="security-detail-heading">
+                        <div>
+                            <p class="eyebrow">Account security</p>
+                            <h3 id="security-detail-title">Security details</h3>
+                            <p id="security-detail-subtitle" class="note-description"></p>
+                        </div>
+                        <button id="close-security-detail" class="button button-text" type="button">Close</button>
+                    </div>
+
+                    <div id="security-detail-summary" class="security-detail-summary"></div>
+
+                    <div class="security-detail-actions">
+                        <button id="security-restore-access" class="button button-secondary" type="button">Restore access</button>
+                        <button id="security-forgive-strikes" class="button button-secondary" type="button">Forgive strikes</button>
+                        <button id="security-reenable-account" class="button button-secondary" type="button">Re-enable account</button>
+                        <button id="security-disable-account" class="button security-danger-button" type="button">Disable account</button>
+                    </div>
+
+                    <div class="security-detail-grid">
+                        <section>
+                            <h3>Incident history</h3>
+                            <div id="security-incidents" class="security-history-list"></div>
+                        </section>
+                        <section>
+                            <h3>Admin audit trail</h3>
+                            <div id="security-audit" class="security-history-list"></div>
+                        </section>
+                    </div>
                 </section>
             </section>
         </section>
