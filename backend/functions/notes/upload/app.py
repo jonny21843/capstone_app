@@ -28,8 +28,12 @@ ALLOWED_TYPES = {
     "image/webp",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.apple.pages",
+    "application/x-iwork-pages-sffpages",
+    "application/octet-stream",
 }
-ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".webp", ".pptx", ".xlsx"}
+ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".webp", ".pptx", ".xlsx", ".docx", ".pages"}
 
 
 def response(status_code, body):
@@ -102,16 +106,22 @@ def lambda_handler(event, context):
     except (TypeError, ValueError):
         file_size = 0
 
-    if not raw_filename or file_extension(raw_filename) not in ALLOWED_EXTENSIONS:
+    extension = file_extension(raw_filename)
+    if not raw_filename or extension not in ALLOWED_EXTENSIONS:
         return response(
             400,
-            {"error": "Only PDF, JPG, PNG, WEBP, PPTX, and XLSX files are allowed"},
+            {"error": "Only PDF, JPG, PNG, WEBP, DOCX, PPTX, XLSX, and PAGES files are allowed"},
         )
 
-    if content_type not in ALLOWED_TYPES:
+    pages_type_ok = extension == ".pages" and content_type in {
+        "application/vnd.apple.pages",
+        "application/x-iwork-pages-sffpages",
+        "application/octet-stream",
+    }
+    if content_type not in ALLOWED_TYPES or (content_type == "application/octet-stream" and not pages_type_ok):
         return response(
             400,
-            {"error": "Unsupported file type. Use PDF, JPG, PNG, WEBP, PPTX, or XLSX"},
+            {"error": "Unsupported file type. Use PDF, JPG, PNG, WEBP, DOCX, PPTX, XLSX, or PAGES"},
         )
 
     if file_size <= 0:
