@@ -379,6 +379,10 @@ def handle_action(event, user_id):
 
     action = (payload.get("action") or "").strip().lower()
     admin_email = current_admin_email(event)
+    admin_user_id = (claims(event).get("sub") or "").strip()
+
+    if action == "disable_account" and admin_user_id == user_id:
+        return response(400, {"error": "You cannot disable your own admin account from the security portal."})
 
     try:
         if action == "restore_access":
