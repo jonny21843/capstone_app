@@ -76,6 +76,87 @@ Resources:
               - ETag
             MaxAge: 300
 
+  GuardDutyMalwareScanRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: malware-protection-plan.guardduty.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StudyGroundsMalwareProtection
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: AllowManagedRuleToSendS3EventsToGuardDuty
+                Effect: Allow
+                Action:
+                  - events:PutRule
+                  - events:DeleteRule
+                  - events:PutTargets
+                  - events:RemoveTargets
+                Resource: !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/DO-NOT-DELETE-AmazonGuardDutyMalwareProtectionS3*"
+                Condition:
+                  StringLike:
+                    events:ManagedBy: malware-protection-plan.guardduty.amazonaws.com
+              - Sid: AllowGuardDutyToMonitorEventBridgeManagedRule
+                Effect: Allow
+                Action:
+                  - events:DescribeRule
+                  - events:ListTargetsByRule
+                Resource: !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/DO-NOT-DELETE-AmazonGuardDutyMalwareProtectionS3*"
+              - Sid: AllowPostScanTag
+                Effect: Allow
+                Action:
+                  - s3:PutObjectTagging
+                  - s3:GetObjectTagging
+                  - s3:PutObjectVersionTagging
+                  - s3:GetObjectVersionTagging
+                Resource: !Sub "${NotesBucket.Arn}/*"
+              - Sid: AllowEnableS3EventBridgeEvents
+                Effect: Allow
+                Action:
+                  - s3:PutBucketNotification
+                  - s3:GetBucketNotification
+                Resource: !GetAtt NotesBucket.Arn
+              - Sid: AllowPutValidationObject
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "${NotesBucket.Arn}/malware-protection-resource-validation-object"
+              - Sid: AllowCheckBucketOwnership
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt NotesBucket.Arn
+              - Sid: AllowMalwareScan
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: !Sub "${NotesBucket.Arn}/*"
+
+  GuardDutyMalwareProtectionPlan:
+    Type: AWS::GuardDuty::MalwareProtectionPlan
+    DependsOn:
+      - GuardDutyMalwareScanRole
+    Properties:
+      Role: !GetAtt GuardDutyMalwareScanRole.Arn
+      ProtectedResource:
+        S3Bucket:
+          BucketName: !Ref NotesBucket
+          ObjectPrefixes:
+            - users/
+      Actions:
+        Tagging:
+          Status: ENABLED
+      Tags:
+        - Key: Application
+          Value: StudyGrounds
+
   NotesApi:
     Type: AWS::Serverless::HttpApi
     Properties:
@@ -421,6 +502,31 @@ Resources:
             Path: /api/notes/{noteId}/publish
             Method: PATCH
             PayloadFormatVersion: "2.0"
+
+  MalwareScanResultFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/functions/security/malware_scan_result/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures: [x86_64]
+      MemorySize: 128
+      Timeout: 10
+      Environment:
+        Variables:
+          NOTES_TABLE: !Ref NotesTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref NotesTable
+      Events:
+        GuardDutyScanResult:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              source:
+                - aws.guardduty
+              detail-type:
+                - GuardDuty Malware Protection Object Scan Result
 
   PublicNotesFunction:
     Type: AWS::Serverless::Function
