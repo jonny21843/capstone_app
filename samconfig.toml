@@ -1,0 +1,17 @@
+version = 0.1
+
+[default.global.parameters]
+stack_name = "notes-app-dev"
+region = "us-east-2"
+
+[default.build.parameters]
+template_file = "infrastructure/template.yaml"
+cached = true
+parallel = true
+
+[default.deploy.parameters]
+template_file = ".aws-sam/build/template.yaml"
+capabilities = "CAPABILITY_IAM"
+resolve_s3 = true
+confirm_changeset = true
+parameter_overrides = "CognitoUserPoolId=us-east-2_sZ3qWdfwv CognitoAppClientId=3t79knetd0pdav5jsso0osfb1e AdminEmails=jonathan.feagans@outlook.com"
