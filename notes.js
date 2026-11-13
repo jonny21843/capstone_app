@@ -32,13 +32,18 @@ function getSearchSelectValues(type) {
     }
 
     const subject = document.getElementById("note-subject")?.value.trim() || "";
+
+    if (!subject) {
+        return publicTaxonomy.topics;
+    }
+
     const subjectKey = Object.keys(publicTaxonomy.subjectTopics || {}).find(
         (key) => key.toLowerCase() === subject.toLowerCase()
     );
 
     return subjectKey
         ? publicTaxonomy.subjectTopics[subjectKey]
-        : publicTaxonomy.topics;
+        : [];
 }
 
 function closeSearchSelect(container) {
