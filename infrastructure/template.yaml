@@ -541,7 +541,9 @@ Resources:
             - Effect: Allow
               Action:
                 - ses:SendEmail
-              Resource: !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/joinstudygrounds.com"
+              Resource:
+                - !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/joinstudygrounds.com"
+                - !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:configuration-set/studygrounds-transactional"
       Events:
         GuardDutyScanResult:
           Type: EventBridgeRule
