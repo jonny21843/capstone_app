@@ -1560,3 +1560,51 @@ h3 {
         margin-left: 12px;
     }
 }
+
+
+.source-viewer-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.office-preview-wrap {
+    background: #f8f9fc;
+}
+
+.source-office-frame {
+    display: block;
+    width: 100%;
+    height: min(72vh, 820px);
+    min-height: 560px;
+    border: 0;
+    background: #fff;
+}
+
+.office-preview-note {
+    margin: 0;
+    padding: 9px 14px;
+    border-top: 1px solid #eef1f5;
+    color: #667085;
+    background: #fafbff;
+    font-size: 0.76rem;
+}
+
+@media (max-width: 720px) {
+    .source-viewer-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .source-viewer-actions .button {
+        width: 100%;
+        text-align: center;
+    }
+
+    .source-office-frame {
+        height: 68vh;
+        min-height: 500px;
+    }
+}
