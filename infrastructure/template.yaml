@@ -88,6 +88,9 @@ Resources:
         "POST /api/notes/{noteId}/files":
           ThrottlingBurstLimit: 4
           ThrottlingRateLimit: 2
+        "GET /api/public/notes/{noteId}/files/{fileId}/preview":
+          ThrottlingBurstLimit: 4
+          ThrottlingRateLimit: 2
       CorsConfiguration:
         AllowOrigins:
           - http://localhost:8080
@@ -302,8 +305,8 @@ Resources:
       Handler: app.lambda_handler
       Runtime: python3.12
       Architectures: [x86_64]
-      MemorySize: 128
-      Timeout: 5
+      MemorySize: 256
+      Timeout: 10
       Environment:
         Variables:
           NOTES_TABLE: !Ref NotesTable
