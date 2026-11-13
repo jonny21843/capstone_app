@@ -2098,3 +2098,11 @@ h3 {
         padding: 20px;
     }
 }
+
+
+.search-select-option.keyboard-active,
+.search-select-option[aria-selected="true"] {
+    background: #eef0ff;
+    color: #3440a5;
+    outline: none;
+}
