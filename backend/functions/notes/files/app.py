@@ -23,6 +23,10 @@ ALLOWED_TYPES = {
     "image/webp",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.apple.pages",
+    "application/x-iwork-pages-sffpages",
+    "application/octet-stream",
 }
 
 EXTENSIONS_BY_TYPE = {
@@ -32,6 +36,10 @@ EXTENSIONS_BY_TYPE = {
     "image/webp": {".webp"},
     "application/vnd.openxmlformats-officedocument.presentationml.presentation": {".pptx"},
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {".xlsx"},
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {".docx"},
+    "application/vnd.apple.pages": {".pages"},
+    "application/x-iwork-pages-sffpages": {".pages"},
+    "application/octet-stream": {".pages"},
 }
 
 
@@ -84,6 +92,10 @@ def validate_file_signature(key, content_type):
     if content_type in {
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.apple.pages",
+        "application/x-iwork-pages-sffpages",
+        "application/octet-stream",
     }:
         try:
             with ZipFile(BytesIO(data)) as archive:
@@ -94,7 +106,17 @@ def validate_file_signature(key, content_type):
         if content_type == "application/vnd.openxmlformats-officedocument.presentationml.presentation":
             return "[Content_Types].xml" in names and "ppt/presentation.xml" in names
 
-        return "[Content_Types].xml" in names and "xl/workbook.xml" in names
+        if content_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+            return "[Content_Types].xml" in names and "xl/workbook.xml" in names
+
+        if content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            return "[Content_Types].xml" in names and "word/document.xml" in names
+
+        # Modern Apple Pages files are ZIP containers with iWork IWA content.
+        return any(
+            name == "Index/Document.iwa" or name.startswith("Index/") and name.endswith(".iwa")
+            for name in names
+        )
 
     return False
 
@@ -177,6 +199,10 @@ def register_file(user_id, note_id, payload):
     if actual_type not in ALLOWED_TYPES or actual_type != content_type:
         s3.delete_object(Bucket=bucket_name, Key=key)
         return response(400, {"error": "Uploaded file type verification failed"})
+
+    if actual_type == "application/octet-stream" and filename_extension(filename) != ".pages":
+        s3.delete_object(Bucket=bucket_name, Key=key)
+        return response(400, {"error": "Generic binary uploads are only allowed for Apple Pages files"})
 
     try:
         signature_valid = validate_file_signature(key, actual_type)
