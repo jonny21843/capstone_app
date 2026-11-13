@@ -1956,3 +1956,30 @@ h3 {
         padding: 22px;
     }
 }
+
+
+.app-notice-toast {
+    position: fixed;
+    z-index: 10000;
+    left: 50%;
+    bottom: 28px;
+    width: min(520px, calc(100% - 32px));
+    transform: translateX(-50%);
+    border: 1px solid #d7dcff;
+    border-radius: 12px;
+    padding: 12px 16px;
+    background: #172033;
+    color: #fff;
+    box-shadow: 0 14px 38px rgba(16, 24, 40, 0.22);
+    font-size: 0.88rem;
+    font-weight: 700;
+    line-height: 1.45;
+    text-align: center;
+    opacity: 1;
+    transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.app-notice-toast.leaving {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+}
