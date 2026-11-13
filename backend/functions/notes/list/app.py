@@ -128,4 +128,42 @@ def lambda_handler(event, context):
     notes = [reconcile_pending_scans(note) for note in result.get("Items", [])]
     notes.sort(key=lambda note: note.get("createdAt", ""), reverse=True)
 
-    return response(200, {"notes": notes})
+    subjects = sorted(
+        {
+            (note.get("subject") or "").strip()
+            for note in notes
+            if (note.get("subject") or "").strip()
+        },
+        key=str.lower,
+    )
+    collections = sorted(
+        {
+            (note.get("collection") or "").strip()
+            for note in notes
+            if (note.get("collection") or "").strip()
+        },
+        key=str.lower,
+    )
+    subject_topics = {}
+    for note in notes:
+        subject = (note.get("subject") or "").strip()
+        topic = (note.get("collection") or "").strip()
+        if subject and topic:
+            subject_topics.setdefault(subject, set()).add(topic)
+
+    subject_topics = {
+        subject: sorted(values, key=str.lower)
+        for subject, values in subject_topics.items()
+    }
+
+    return response(
+        200,
+        {
+            "notes": notes,
+            "taxonomy": {
+                "subjects": subjects,
+                "collections": collections,
+                "subjectTopics": subject_topics,
+            },
+        },
+    )
