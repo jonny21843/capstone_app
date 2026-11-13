@@ -7,6 +7,9 @@ on:
       - feature/cognito-auth
     paths:
       - "index.html"
+      - "study-notes.html"
+      - "robots.txt"
+      - "sitemap.xml"
       - "styles.css"
       - "config.js"
       - "auth.js"
@@ -44,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist/auth
-          cp index.html styles.css config.js auth.js notes.js tabs.js dist/
+          cp index.html study-notes.html robots.txt sitemap.xml styles.css config.js auth.js notes.js tabs.js dist/
           cp auth/*.html auth/*.js dist/auth/
 
       - name: Sync frontend to S3
