@@ -2049,6 +2049,8 @@ async function loadPublicNotes() {
             const fileCount = Number(note.fileCount || 0);
             const viewCount = Number(note.viewCount || 0);
 
+            const seoUrl = publicNoteSeoUrl(note.noteId, note.title);
+
             card.innerHTML = `
                 <div class="public-note-card-top">
                     <span class="subject-chip">${escapeHtml(subjectLabel)}</span>
@@ -2056,7 +2058,7 @@ async function loadPublicNotes() {
                 </div>
 
                 <div class="public-note-card-body">
-                    <h3>${escapeHtml(note.title || "Untitled note")}</h3>
+                    <h3><a class="public-note-seo-link" href="${escapeHtml(seoUrl)}">${escapeHtml(note.title || "Untitled note")}</a></h3>
                     ${collectionLabel ? `<p class="public-note-collection">${escapeHtml(collectionLabel)}</p>` : ""}
                     <p class="public-note-description">${escapeHtml(note.description || "No description provided.")}</p>
                 </div>
@@ -2071,6 +2073,11 @@ async function loadPublicNotes() {
             `;
 
             const openCard = () => openPublicNote(note.noteId);
+            card.querySelector(".public-note-seo-link")?.addEventListener("click", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                openCard();
+            });
             card.addEventListener("click", openCard);
             card.addEventListener("keydown", (event) => {
                 if (event.key === "Enter" || event.key === " ") {
@@ -2087,16 +2094,24 @@ async function loadPublicNotes() {
     }
 }
 
-function publicNoteShareUrl(noteId) {
-    const url = new URL(window.location.href);
-    url.search = "";
-    url.hash = "";
-    url.searchParams.set("note", noteId);
-    return url.toString();
+function publicNoteSlug(title) {
+    return String(title || "study-note")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 80) || "study-note";
 }
 
-async function sharePublicNote(noteId, event = null) {
-    const url = publicNoteShareUrl(noteId);
+function publicNoteSeoUrl(noteId, title) {
+    return `${window.location.origin}/notes/${encodeURIComponent(noteId)}/${publicNoteSlug(title)}`;
+}
+
+function publicNoteShareUrl(noteId, title) {
+    return publicNoteSeoUrl(noteId, title);
+}
+
+async function sharePublicNote(noteId, title, event = null) {
+    const url = publicNoteShareUrl(noteId, title);
     try {
         await navigator.clipboard.writeText(url);
         showCopyToast(event);
@@ -2185,7 +2200,7 @@ async function openPublicNote(noteId, updateUrl = true) {
         document.querySelector(".explore-controls")?.setAttribute("hidden", "");
         document.getElementById("public-status").hidden = true;
         detail.hidden = false;
-        document.getElementById("share-public-note")?.addEventListener("click", (event) => sharePublicNote(noteId, event));
+        document.getElementById("share-public-note")?.addEventListener("click", (event) => sharePublicNote(noteId, note.title, event));
         await Promise.all([
             loadNativeExcelPreviews(noteId),
             loadNativePowerPointPreviews(noteId),
