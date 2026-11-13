@@ -69,12 +69,22 @@ def lambda_handler(event, context):
 
     files = []
     for file_record in note.get("files") or []:
+        filename = (file_record.get("filename") or "source-file").replace('"', "'")
         view_url = s3.generate_presigned_url(
             "get_object",
             Params={
                 "Bucket": bucket_name,
                 "Key": file_record["key"],
                 "ResponseContentDisposition": "inline",
+            },
+            ExpiresIn=3600,
+        )
+        download_url = s3.generate_presigned_url(
+            "get_object",
+            Params={
+                "Bucket": bucket_name,
+                "Key": file_record["key"],
+                "ResponseContentDisposition": f'attachment; filename="{filename}"',
             },
             ExpiresIn=600,
         )
@@ -86,7 +96,9 @@ def lambda_handler(event, context):
                 "sizeBytes": file_record.get("sizeBytes"),
                 "uploadedAt": file_record.get("uploadedAt"),
                 "viewUrl": view_url,
-                "expiresIn": 600,
+                "downloadUrl": download_url,
+                "expiresIn": 3600,
+                "downloadExpiresIn": 600,
             }
         )
 
