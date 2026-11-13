@@ -2,12 +2,15 @@ import json
 import os
 import re
 import uuid
+from datetime import datetime, timezone
 
 import boto3
 from botocore.config import Config
 
 
-table = boto3.resource("dynamodb").Table(os.environ["NOTES_TABLE"])
+dynamodb = boto3.resource("dynamodb")
+table = dynamodb.Table(os.environ["NOTES_TABLE"])
+security_table = dynamodb.Table(os.environ["SECURITY_TABLE"])
 bucket_name = os.environ["NOTES_BUCKET"]
 aws_region = os.environ.get("AWS_REGION", "us-east-2")
 max_file_bytes = int(os.environ.get("MAX_FILE_BYTES", str(20 * 1024 * 1024)))
@@ -54,6 +57,28 @@ def current_user_id(event):
     )
 
 
+def security_profile(user_id):
+    return security_table.get_item(
+        Key={"pk": f"USER#{user_id}", "sk": "PROFILE"}
+    ).get("Item") or {}
+
+
+def upload_block_reason(profile):
+    if profile.get("uploadBlocked"):
+        return "Uploads are disabled for this account pending a security review."
+
+    blocked_until = profile.get("uploadBlockedUntil")
+    if blocked_until:
+        try:
+            until = datetime.fromisoformat(blocked_until.replace("Z", "+00:00"))
+            if until > datetime.now(timezone.utc):
+                return "Uploads are temporarily paused after a security scan detected malware."
+        except (TypeError, ValueError):
+            return "Uploads are temporarily paused pending a security review."
+
+    return None
+
+
 def safe_filename(value):
     cleaned = SAFE_FILENAME.sub("_", value or "").strip(" .")
     return cleaned[:180] or "upload"
@@ -71,6 +96,10 @@ def lambda_handler(event, context):
     user_id = current_user_id(event)
     if not user_id:
         return response(401, {"error": "Authenticated user ID is missing"})
+
+    block_reason = upload_block_reason(security_profile(user_id))
+    if block_reason:
+        return response(423, {"error": block_reason, "code": "UPLOAD_SECURITY_BLOCK"})
 
     note_id = (event.get("pathParameters") or {}).get("noteId")
     if not note_id:
