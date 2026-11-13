@@ -34,7 +34,15 @@ def searchable_text(note):
     ).lower()
 
 
+def safe_public_files(note):
+    return [
+        item for item in (note.get("files") or [])
+        if item.get("malwareScanStatus") in (None, "NO_THREATS_FOUND")
+    ]
+
+
 def public_projection(note):
+    safe_files = safe_public_files(note)
     return {
         "noteId": note.get("noteId"),
         "title": note.get("title", ""),
@@ -43,7 +51,7 @@ def public_projection(note):
         "description": note.get("description", ""),
         "publicAuthor": note.get("publicAuthor", "Community member"),
         "publishedAt": note.get("publishedAt"),
-        "fileCount": len(note.get("files") or []),
+        "fileCount": len(safe_files),
         "viewCount": int(note.get("viewCount") or 0),
     }
 
@@ -76,7 +84,7 @@ def lambda_handler(event, context):
 
         scan_args["ExclusiveStartKey"] = last_key
 
-    all_public = [note for note in all_public if note.get("files")]
+    all_public = [note for note in all_public if safe_public_files(note)]
 
     subjects = sorted(
         {
