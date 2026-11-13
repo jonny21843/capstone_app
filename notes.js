@@ -1527,6 +1527,7 @@ async function loadPublicNotes() {
     notesState.publicPageSize = pageSize;
 
     detail.hidden = true;
+    document.querySelector(".explore-controls")?.removeAttribute("hidden");
     grid.hidden = false;
     grid.innerHTML = "";
     setPublicStatus("Loading public notes...");
@@ -1742,6 +1743,7 @@ async function openPublicNote(noteId, updateUrl = true) {
         `;
 
         grid.hidden = true;
+        document.querySelector(".explore-controls")?.setAttribute("hidden", "");
         document.getElementById("public-status").hidden = true;
         detail.hidden = false;
         document.getElementById("share-public-note")?.addEventListener("click", (event) => sharePublicNote(noteId, event));
