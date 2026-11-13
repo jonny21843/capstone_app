@@ -583,6 +583,42 @@ Resources:
               detail-type:
                 - GuardDuty Malware Protection Object Scan Result
 
+  PublicSeoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/functions/public/seo/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures: [x86_64]
+      MemorySize: 128
+      Timeout: 10
+      Environment:
+        Variables:
+          NOTES_TABLE: !Ref NotesTable
+          SITE_URL: "https://joinstudygrounds.com"
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref NotesTable
+      Events:
+        PublicNoteSeo:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotesApi
+            Path: /notes/{noteId}/{slug}
+            Method: GET
+            PayloadFormatVersion: "2.0"
+            Auth:
+              Authorizer: NONE
+        PublicSitemap:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotesApi
+            Path: /sitemap.xml
+            Method: GET
+            PayloadFormatVersion: "2.0"
+            Auth:
+              Authorizer: NONE
+
   PublicNotesFunction:
     Type: AWS::Serverless::Function
     Properties:
