@@ -1983,3 +1983,16 @@ h3 {
     opacity: 0;
     transform: translate(-50%, 6px);
 }
+
+
+.app-notice-toast.success {
+    background: #175c3a;
+}
+
+.app-notice-toast.error {
+    background: #8f1d18;
+}
+
+.app-notice-toast.warning {
+    background: #7a4d00;
+}
