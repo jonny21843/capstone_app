@@ -694,6 +694,51 @@ function renderEmbeddedSource(file, index = 0) {
         `;
     }
 
+
+    const isWord =
+        contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+        filename.endsWith(".docx");
+
+    if (isWord) {
+        return `
+            <section id="${sourceId}" class="source-viewer-card">
+                <div class="source-viewer-header">
+                    <div>
+                        <h3>${name}</h3>
+                        <p>Word source · read-only StudyGrounds preview</p>
+                    </div>
+                    <a class="button button-text" href="${downloadUrl}">
+                        Download Original
+                    </a>
+                </div>
+                <div class="native-document-preview" data-docx-preview data-file-id="${escapeHtml(file.fileId || "")}">
+                    <div class="document-preview-loading">Loading Word preview...</div>
+                </div>
+            </section>
+        `;
+    }
+
+    const isPages = filename.endsWith(".pages");
+
+    if (isPages) {
+        return `
+            <section id="${sourceId}" class="source-viewer-card">
+                <div class="source-viewer-header">
+                    <div>
+                        <h3>${name}</h3>
+                        <p>Apple Pages source · best-effort read-only StudyGrounds preview</p>
+                    </div>
+                    <a class="button button-text" href="${downloadUrl}">
+                        Download Original
+                    </a>
+                </div>
+                <div class="native-document-preview" data-pages-preview data-file-id="${escapeHtml(file.fileId || "")}">
+                    <div class="document-preview-loading">Loading Pages preview...</div>
+                </div>
+            </section>
+        `;
+    }
+
     const isLegacyPowerPoint =
         contentType === "application/vnd.ms-powerpoint" ||
         filename.endsWith(".ppt");
@@ -858,6 +903,85 @@ function renderPresentationSlides(preview) {
         </div>
     `;
 }
+
+function renderDocumentBlocks(preview) {
+    const blocks = preview.blocks || [];
+    if (!blocks.length) {
+        return '<p class="document-preview-error">No readable document content was available to preview.</p>';
+    }
+
+    const renderTable = (block) => {
+        const rows = block.rows || [];
+        if (!rows.length) {
+            return '<div class="document-table-empty">Empty table</div>';
+        }
+        const columnCount = Math.max(...rows.map((row) => row.length), 1);
+        return `
+            <div class="document-table-scroll">
+                <table class="document-preview-table">
+                    <tbody>
+                        ${rows.map((row) => `
+                            <tr>
+                                ${Array.from({length: columnCount}, (_, index) => `
+                                    <td>${escapeHtml(row[index] ?? "")}</td>
+                                `).join("")}
+                            </tr>
+                        `).join("")}
+                    </tbody>
+                </table>
+            </div>
+            ${block.truncated ? '<p class="document-preview-limit">Table preview was truncated for safety.</p>' : ""}
+        `;
+    };
+
+    return `
+        <div class="document-preview-toolbar">
+            <strong>${preview.type === "pages" ? "Pages preview" : "Word preview"}</strong>
+            ${preview.bestEffort ? '<span>Best-effort preview; formatting may differ from the original.</span>' : ""}
+            ${preview.truncated ? '<span>Preview truncated for safety.</span>' : ""}
+        </div>
+        <div class="document-preview-body">
+            ${blocks.map((block) => {
+                if (block.type === "table") return renderTable(block);
+                const text = escapeHtml(block.text || "");
+                if (!text) return "";
+                if (block.type === "title") return `<h2>${text}</h2>`;
+                if (block.type === "subtitle") return `<h3>${text}</h3>`;
+                if (block.type === "heading") {
+                    const level = Math.min(Math.max(Number(block.headingLevel || 2), 1), 6);
+                    return `<h${level}>${text}</h${level}>`;
+                }
+                return `<p>${text}</p>`;
+            }).join("")}
+        </div>
+    `;
+}
+
+async function loadNativeDocumentPreviews(noteId) {
+    const previews = document.querySelectorAll("[data-docx-preview], [data-pages-preview]");
+
+    for (const container of previews) {
+        const fileId = container.dataset.fileId;
+        if (!fileId) continue;
+
+        try {
+            const response = await fetch(
+                apiUrl(`/api/public/notes/${encodeURIComponent(noteId)}/files/${encodeURIComponent(fileId)}/preview`)
+            );
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "Unable to preview document.");
+
+            container.innerHTML = renderDocumentBlocks(data.preview || {});
+        } catch (error) {
+            container.innerHTML = `
+                <p class="document-preview-error">
+                    ${escapeHtml(error.message || "Unable to preview this document.")}
+                </p>
+            `;
+        }
+    }
+}
+
 
 async function loadNativePowerPointPreviews(noteId) {
     const previews = document.querySelectorAll("[data-pptx-preview]");
@@ -1931,7 +2055,8 @@ async function openPublicNote(noteId, updateUrl = true) {
         document.getElementById("share-public-note")?.addEventListener("click", (event) => sharePublicNote(noteId, event));
         await Promise.all([
             loadNativeExcelPreviews(noteId),
-            loadNativePowerPointPreviews(noteId)
+            loadNativePowerPointPreviews(noteId),
+            loadNativeDocumentPreviews(noteId)
         ]);
     } catch (error) {
         detail.hidden = true;
