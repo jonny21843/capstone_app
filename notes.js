@@ -493,7 +493,10 @@ function validateSourceFile(file) {
 function renderEmbeddedSource(file, index = 0) {
     const contentType = (file.contentType || "").toLowerCase();
     const filename = (file.filename || "").toLowerCase();
-    const url = escapeHtml(file.viewUrl);
+    const rawViewUrl = file.viewUrl || "";
+    const rawDownloadUrl = file.downloadUrl || rawViewUrl;
+    const url = escapeHtml(rawViewUrl);
+    const downloadUrl = escapeHtml(rawDownloadUrl);
     const name = escapeHtml(file.filename || "Source file");
     const sourceId = `source-${escapeHtml(file.fileId || String(index + 1))}`;
 
@@ -506,7 +509,7 @@ function renderEmbeddedSource(file, index = 0) {
                         <p>PDF source</p>
                     </div>
                     <a class="button button-secondary" href="${url}" target="_blank" rel="noopener">
-                        Open Original ↗
+                        Open in Browser ↗
                     </a>
                 </div>
                 <iframe
@@ -527,7 +530,7 @@ function renderEmbeddedSource(file, index = 0) {
                         <p>Image source</p>
                     </div>
                     <a class="button button-secondary" href="${url}" target="_blank" rel="noopener">
-                        Open Original ↗
+                        Open in Browser ↗
                     </a>
                 </div>
                 <div class="source-image-wrap">
@@ -542,15 +545,59 @@ function renderEmbeddedSource(file, index = 0) {
         contentType === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
         /\.(ppt|pptx)$/.test(filename);
 
+    const isExcel =
+        contentType === "application/vnd.ms-excel" ||
+        contentType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+        /\.(xls|xlsx)$/.test(filename);
+
+    if (isPowerPoint || isExcel) {
+        const officePreviewUrl =
+            "https://view.officeapps.live.com/op/embed.aspx?src=" +
+            encodeURIComponent(rawViewUrl);
+        const escapedOfficePreviewUrl = escapeHtml(officePreviewUrl);
+        const typeLabel = isExcel ? "Excel" : "PowerPoint";
+
+        return `
+            <section id="${sourceId}" class="source-viewer-card">
+                <div class="source-viewer-header">
+                    <div>
+                        <h3>${name}</h3>
+                        <p>${typeLabel} source · read-only browser preview</p>
+                    </div>
+                    <div class="source-viewer-actions">
+                        <a class="button button-secondary" href="${escapedOfficePreviewUrl}" target="_blank" rel="noopener noreferrer">
+                            Open Preview ↗
+                        </a>
+                        <a class="button button-text" href="${downloadUrl}">
+                            Download Original
+                        </a>
+                    </div>
+                </div>
+                <div class="office-preview-wrap">
+                    <iframe
+                        class="source-office-frame"
+                        src="${escapedOfficePreviewUrl}"
+                        title="${name} preview"
+                        loading="lazy"
+                        referrerpolicy="no-referrer"
+                    ></iframe>
+                    <p class="office-preview-note">
+                        Preview powered by Microsoft Office for the web. If the preview service is unavailable, use Download Original.
+                    </p>
+                </div>
+            </section>
+        `;
+    }
+
     return `
         <section id="${sourceId}" class="source-viewer-card">
             <div class="source-viewer-header">
                 <div>
                     <h3>${name}</h3>
-                    <p>${isPowerPoint ? "PowerPoint source · preview not available yet." : "Preview is not available for this file type."}</p>
+                    <p>Browser preview is not available for this file type.</p>
                 </div>
-                <a class="button button-primary" href="${url}" target="_blank" rel="noopener">
-                    Open Original ↗
+                <a class="button button-text" href="${downloadUrl}">
+                    Download Original
                 </a>
             </div>
         </section>
