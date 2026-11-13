@@ -186,6 +186,7 @@ const notesState = {
     editingNoteId: null,
     activeView: "my-notes",
     uploadInProgress: false,
+    createInProgress: false,
     replaceFileId: null,
     publicPage: 1,
     publicTotalPages: 1,
@@ -1014,6 +1015,11 @@ async function loadNotes() {
 async function createNote(event) {
     event.preventDefault();
 
+    if (notesState.createInProgress) {
+        return;
+    }
+
+    notesState.createInProgress = true;
     const form = event.currentTarget;
     const title = document.getElementById("note-title").value.trim();
     const subject = document.getElementById("note-subject").value.trim();
@@ -1026,17 +1032,20 @@ async function createNote(event) {
 
     if (!title) {
         setCreateStatus("A title is required.", "error");
+        notesState.createInProgress = false;
         return;
     }
 
     const sourceValidationError = validateSourceFile(sourceFile);
     if (sourceValidationError) {
         setCreateStatus(sourceValidationError, "error");
+        notesState.createInProgress = false;
         return;
     }
 
     if (sourceFile && notesState.uploadInProgress) {
         setCreateStatus("Please wait for the current upload to finish.", "error");
+        notesState.createInProgress = false;
         return;
     }
 
@@ -1113,6 +1122,7 @@ async function createNote(event) {
             "error"
         );
     } finally {
+        notesState.createInProgress = false;
         submitButton.disabled = false;
     }
 }
