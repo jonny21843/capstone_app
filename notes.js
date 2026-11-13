@@ -424,19 +424,95 @@ function setCreateStatus(message, type = "") {
     element.className = `status-text ${type}`.trim();
 }
 
-function showAppNotice(message) {
+function showAppNotice(message, type = "info", duration = 4200) {
     const existing = document.querySelector(".app-notice-toast");
     if (existing) existing.remove();
 
     const toast = document.createElement("div");
-    toast.className = "app-notice-toast";
+    toast.className = `app-notice-toast ${type}`.trim();
     toast.textContent = message;
     document.body.appendChild(toast);
 
     window.setTimeout(() => {
         toast.classList.add("leaving");
         window.setTimeout(() => toast.remove(), 220);
-    }, 4200);
+    }, duration);
+}
+
+function notifyScanStateChanges(notes) {
+    const storageKey = "studygrounds_scan_notification_state";
+    let previous = {};
+    try {
+        previous = JSON.parse(sessionStorage.getItem(storageKey) || "{}");
+    } catch {
+        previous = {};
+    }
+
+    const next = {};
+
+    for (const note of notes || []) {
+        const noteId = note.noteId;
+        if (!noteId) continue;
+
+        const noteKey = `note:${noteId}`;
+        const currentNoteState = {
+            visibility: note.visibility || "private",
+            publishPending: Boolean(note.publishPending),
+            publishScanError: note.publishScanError || ""
+        };
+        const priorNoteState = previous[noteKey];
+
+        if (
+            priorNoteState?.publishPending &&
+            !currentNoteState.publishPending &&
+            currentNoteState.visibility === "public"
+        ) {
+            showAppNotice(
+                `"${note.title || "Your note"}" passed its security scan and is now published.`,
+                "success",
+                5200
+            );
+        }
+
+        if (
+            currentNoteState.publishScanError &&
+            currentNoteState.publishScanError !== priorNoteState?.publishScanError
+        ) {
+            showAppNotice(
+                `"${note.title || "Your note"}" could not be published because a source file did not pass the security scan.`,
+                "error",
+                7000
+            );
+        }
+
+        next[noteKey] = currentNoteState;
+
+        for (const file of note.files || []) {
+            const fileKey = `file:${noteId}:${file.fileId || file.key || file.filename}`;
+            const currentStatus = (file.malwareScanStatus || "").toUpperCase();
+            const priorStatus = previous[fileKey] || "";
+
+            if (
+                currentStatus &&
+                currentStatus !== "PENDING" &&
+                currentStatus !== "NO_THREATS_FOUND" &&
+                currentStatus !== priorStatus
+            ) {
+                const threat = currentStatus === "THREATS_FOUND";
+                showAppNotice(
+                    threat
+                        ? `Security alert: "${file.filename || "A source file"}" was blocked because malware was detected.`
+                        : `"${file.filename || "A source file"}" could not be cleared by the security scan and remains blocked.`,
+                    "error",
+                    8000
+                );
+            }
+
+            next[fileKey] = currentStatus;
+        }
+    }
+
+    sessionStorage.setItem(storageKey, JSON.stringify(next));
 }
 
 function formatBytes(value) {
@@ -1031,6 +1107,7 @@ async function loadNotes() {
 
         const data = await response.json();
         notesState.notes = data.notes || [];
+        notifyScanStateChanges(notesState.notes);
         renderNotes();
 
         if (notesState.scanRefreshTimer) {
