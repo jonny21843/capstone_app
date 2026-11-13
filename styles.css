@@ -2106,3 +2106,119 @@ h3 {
     color: #3440a5;
     outline: none;
 }
+
+
+.public-note-seo-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.public-note-seo-link:hover,
+.public-note-seo-link:focus-visible {
+    color: #3440a5;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.seo-note-body {
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at top left, rgba(88, 101, 242, 0.08), transparent 34%),
+        #f7f8fc;
+}
+
+.seo-note-shell {
+    width: min(920px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 32px 0 56px;
+}
+
+.seo-note-brand {
+    display: inline-block;
+    margin-bottom: 24px;
+    color: #172033;
+    font-size: 1.35rem;
+    font-weight: 850;
+    letter-spacing: -0.03em;
+    text-decoration: none;
+}
+
+.seo-note-card {
+    padding: clamp(24px, 5vw, 48px);
+    border: 1px solid #e4e7ec;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 18px 48px rgba(16, 24, 40, 0.07);
+}
+
+.seo-note-card h1 {
+    max-width: 780px;
+    margin: 8px 0 12px;
+    color: #172033;
+    font-size: clamp(2rem, 6vw, 3.8rem);
+    line-height: 1.05;
+    letter-spacing: -0.045em;
+}
+
+.seo-note-taxonomy,
+.seo-note-meta,
+.seo-note-footer {
+    color: #667085;
+}
+
+.seo-note-taxonomy {
+    font-weight: 700;
+}
+
+.seo-note-description {
+    max-width: 760px;
+    margin: 22px 0;
+    color: #475467;
+    font-size: 1.08rem;
+    line-height: 1.75;
+}
+
+.seo-note-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid #eef1f5;
+    font-size: 0.9rem;
+}
+
+.seo-note-sources {
+    margin: 28px 0;
+}
+
+.seo-note-sources h2 {
+    margin-bottom: 12px;
+    color: #172033;
+}
+
+.seo-note-sources ul {
+    display: grid;
+    gap: 8px;
+    padding-left: 20px;
+    color: #475467;
+}
+
+.seo-note-open {
+    display: inline-flex;
+    text-decoration: none;
+}
+
+.seo-note-footer {
+    margin-top: 18px;
+    text-align: center;
+}
+
+.seo-note-footer a {
+    color: #3440a5;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.seo-note-footer a:hover {
+    text-decoration: underline;
+}
