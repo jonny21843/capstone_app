@@ -33,6 +33,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Show GitHub OIDC claims
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" | python -c 'import json,sys; print(json.load(sys.stdin)["value"])')"
+          TOKEN="$token" python - <<'PY'
+          import base64
+          import json
+          import os
+
+          token = os.environ["TOKEN"]
+          payload = token.split(".")[1]
+          payload += "=" * (-len(payload) % 4)
+          claims = json.loads(base64.urlsafe_b64decode(payload))
+          for key in ("sub", "aud", "repository", "environment", "ref", "job_workflow_ref"):
+              if key in claims:
+                  print(f"{key}={claims[key]}")
+          PY
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
