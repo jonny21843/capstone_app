@@ -512,11 +512,7 @@ function renderEmbeddedSource(file, index = 0) {
                         Open in Browser ↗
                     </a>
                 </div>
-                <iframe
-                    class="source-pdf-frame"
-                    src="${url}#view=FitH"
-                    title="${name}"
-                ></iframe>
+                <iframe class="source-pdf-frame" src="${url}#view=FitH" title="${name}"></iframe>
             </section>
         `;
     }
@@ -540,61 +536,44 @@ function renderEmbeddedSource(file, index = 0) {
         `;
     }
 
-    const isPowerPoint =
-        contentType === "application/vnd.ms-powerpoint" ||
-        contentType === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
-        /\.(ppt|pptx)$/.test(filename);
-
     const isExcel =
-        contentType === "application/vnd.ms-excel" ||
         contentType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-        /\.(xls|xlsx)$/.test(filename);
+        filename.endsWith(".xlsx");
 
-    if (isPowerPoint || isExcel) {
-        const officePreviewUrl =
-            "https://view.officeapps.live.com/op/embed.aspx?src=" +
-            encodeURIComponent(rawViewUrl);
-        const escapedOfficePreviewUrl = escapeHtml(officePreviewUrl);
-        const typeLabel = isExcel ? "Excel" : "PowerPoint";
-
+    if (isExcel) {
         return `
             <section id="${sourceId}" class="source-viewer-card">
                 <div class="source-viewer-header">
                     <div>
                         <h3>${name}</h3>
-                        <p>${typeLabel} source · read-only browser preview</p>
+                        <p>Excel source · read-only Notes App preview</p>
                     </div>
-                    <div class="source-viewer-actions">
-                        <a class="button button-secondary" href="${escapedOfficePreviewUrl}" target="_blank" rel="noopener noreferrer">
-                            Open Preview ↗
-                        </a>
-                        <a class="button button-text" href="${downloadUrl}">
-                            Download Original
-                        </a>
-                    </div>
+                    <a class="button button-text" href="${downloadUrl}">
+                        Download Original
+                    </a>
                 </div>
-                <div class="office-preview-wrap">
-                    <iframe
-                        class="source-office-frame"
-                        src="${escapedOfficePreviewUrl}"
-                        title="${name} preview"
-                        loading="lazy"
-                        referrerpolicy="no-referrer"
-                    ></iframe>
-                    <p class="office-preview-note">
-                        Preview powered by Microsoft Office for the web. If the preview service is unavailable, use Download Original.
-                    </p>
+                <div class="native-sheet-preview" data-xlsx-preview data-file-id="${escapeHtml(file.fileId || "")}">
+                    <div class="sheet-preview-loading">Loading workbook preview...</div>
                 </div>
             </section>
         `;
     }
+
+    const isPowerPoint =
+        contentType === "application/vnd.ms-powerpoint" ||
+        contentType === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+        /\.(ppt|pptx)$/.test(filename);
+
+    const isLegacyExcel =
+        contentType === "application/vnd.ms-excel" ||
+        filename.endsWith(".xls");
 
     return `
         <section id="${sourceId}" class="source-viewer-card">
             <div class="source-viewer-header">
                 <div>
                     <h3>${name}</h3>
-                    <p>Browser preview is not available for this file type.</p>
+                    <p>${isPowerPoint ? "PowerPoint source" : isLegacyExcel ? "Legacy Excel source" : "Source file"} · browser preview not available yet.</p>
                 </div>
                 <a class="button button-text" href="${downloadUrl}">
                     Download Original
@@ -602,6 +581,116 @@ function renderEmbeddedSource(file, index = 0) {
             </div>
         </section>
     `;
+}
+
+function renderSheetTable(sheet) {
+    const rows = sheet.rows || [];
+    const columnCount = Math.max(
+        Number(sheet.columnCount || 0),
+        ...rows.map((row) => row.length),
+        1
+    );
+
+    const headerCells = Array.from({length: columnCount}, (_, index) => {
+        let n = index + 1;
+        let label = "";
+        while (n > 0) {
+            n -= 1;
+            label = String.fromCharCode(65 + (n % 26)) + label;
+            n = Math.floor(n / 26);
+        }
+        return `<th scope="col">${label}</th>`;
+    }).join("");
+
+    const bodyRows = rows.length
+        ? rows.map((row, rowIndex) => `
+            <tr>
+                <th scope="row">${rowIndex + 1}</th>
+                ${Array.from({length: columnCount}, (_, colIndex) => `
+                    <td>${escapeHtml(row[colIndex] ?? "")}</td>
+                `).join("")}
+            </tr>
+        `).join("")
+        : `<tr><th scope="row">1</th><td colspan="${columnCount}">This worksheet is empty.</td></tr>`;
+
+    return `
+        <div class="sheet-table-scroll">
+            <table class="sheet-preview-table">
+                <thead>
+                    <tr>
+                        <th class="sheet-corner"></th>
+                        ${headerCells}
+                    </tr>
+                </thead>
+                <tbody>${bodyRows}</tbody>
+            </table>
+        </div>
+        ${sheet.truncated ? '<p class="sheet-preview-limit">Preview limited to the first 100 rows and 30 columns.</p>' : ""}
+    `;
+}
+
+async function loadNativeExcelPreviews(noteId) {
+    const previews = document.querySelectorAll("[data-xlsx-preview]");
+
+    for (const container of previews) {
+        const fileId = container.dataset.fileId;
+        if (!fileId) continue;
+
+        try {
+            const response = await fetch(
+                apiUrl(`/api/public/notes/${encodeURIComponent(noteId)}/files/${encodeURIComponent(fileId)}/preview`)
+            );
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "Unable to preview workbook.");
+
+            const preview = data.preview || {};
+            const sheets = preview.sheets || [];
+
+            if (!sheets.length) {
+                container.innerHTML = '<p class="sheet-preview-error">No worksheets were available to preview.</p>';
+                continue;
+            }
+
+            container.innerHTML = `
+                <div class="sheet-tabs" role="tablist" aria-label="Workbook sheets">
+                    ${sheets.map((sheet, index) => `
+                        <button
+                            class="sheet-tab ${index === 0 ? "active" : ""}"
+                            type="button"
+                            data-sheet-index="${index}"
+                            role="tab"
+                            aria-selected="${index === 0 ? "true" : "false"}"
+                        >
+                            ${escapeHtml(sheet.name)}
+                        </button>
+                    `).join("")}
+                </div>
+                <div class="sheet-preview-content"></div>
+            `;
+
+            const content = container.querySelector(".sheet-preview-content");
+            const showSheet = (index) => {
+                content.innerHTML = renderSheetTable(sheets[index]);
+                container.querySelectorAll(".sheet-tab").forEach((button) => {
+                    const active = Number(button.dataset.sheetIndex) === index;
+                    button.classList.toggle("active", active);
+                    button.setAttribute("aria-selected", String(active));
+                });
+            };
+
+            container.querySelectorAll(".sheet-tab").forEach((button) => {
+                button.addEventListener("click", () => showSheet(Number(button.dataset.sheetIndex)));
+            });
+
+            showSheet(0);
+        } catch (error) {
+            container.innerHTML = `
+                <p class="sheet-preview-error">
+                    ${escapeHtml(error.message || "Unable to preview this workbook.")}
+                </p>
+            `;
+        }
+    }
 }
 
 function renderNotes() {
@@ -1577,6 +1666,7 @@ async function openPublicNote(noteId, updateUrl = true) {
         document.getElementById("public-status").hidden = true;
         detail.hidden = false;
         document.getElementById("share-public-note")?.addEventListener("click", (event) => sharePublicNote(noteId, event));
+        await loadNativeExcelPreviews(noteId);
     } catch (error) {
         setPublicStatus(error.message || "Unable to open note.", true);
     }
