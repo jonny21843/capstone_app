@@ -91,8 +91,22 @@ def lambda_handler(event, context):
     if published:
         if not (note.get("description") or "").strip():
             return response(400, {"error": "Add a description before publishing"})
-        if not note.get("files"):
+        files = note.get("files") or []
+        if not files:
             return response(400, {"error": "Upload at least one source file before publishing"})
+
+        blocked_files = [
+            item for item in files
+            if item.get("malwareScanStatus") not in (None, "NO_THREATS_FOUND")
+        ]
+        if blocked_files:
+            pending = any(item.get("malwareScanStatus") == "PENDING" for item in blocked_files)
+            message = (
+                "Source file security scan is still in progress. Try publishing again shortly."
+                if pending
+                else "One or more source files did not pass the security scan and cannot be published."
+            )
+            return response(409, {"error": message})
 
         author_display_name = public_author_for_user(username)
         if not author_display_name:
