@@ -6,7 +6,9 @@ from datetime import datetime, timezone
 import boto3
 
 
-table = boto3.resource("dynamodb").Table(os.environ["NOTES_TABLE"])
+dynamodb = boto3.resource("dynamodb")
+table = dynamodb.Table(os.environ["NOTES_TABLE"])
+security_table = dynamodb.Table(os.environ["SECURITY_TABLE"])
 cognito = boto3.client("cognito-idp")
 s3 = boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-east-2"))
 user_pool_id = os.environ["COGNITO_USER_POOL_ID"]
@@ -88,6 +90,12 @@ def refresh_malware_scan_statuses(note):
     return refreshed
 
 
+def security_profile(user_id):
+    return security_table.get_item(
+        Key={"pk": f"USER#{user_id}", "sk": "PROFILE"}
+    ).get("Item") or {}
+
+
 def public_author_for_user(username):
     user = cognito.admin_get_user(
         UserPoolId=user_pool_id,
@@ -134,6 +142,16 @@ def lambda_handler(event, context):
     now = datetime.now(timezone.utc).isoformat()
 
     if published:
+        profile = security_profile(user_id)
+        if profile.get("publishingBlocked"):
+            return response(
+                423,
+                {
+                    "error": "Publishing is disabled for this account pending a security review.",
+                    "code": "PUBLISH_SECURITY_BLOCK",
+                },
+            )
+
         note = refresh_malware_scan_statuses(note)
         if not (note.get("description") or "").strip():
             return response(400, {"error": "Add a description before publishing"})
