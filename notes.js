@@ -566,7 +566,7 @@ function renderNotes() {
         empty.className = "empty-state";
         empty.innerHTML = `
             <h3>No notes yet</h3>
-            <p>Create your first note, add a description, and upload a PDF or image.</p>
+            <p>Create your first note, add a description, and upload a source file.</p>
             <button class="button button-primary" type="button">+ Create Your First Note</button>
         `;
         empty.querySelector("button").addEventListener("click", () => showCreatePanel(true));
@@ -578,7 +578,7 @@ function renderNotes() {
 
     notesState.notes.forEach((note) => {
         const card = document.createElement("article");
-        card.className = "note-card";
+        card.className = "note-card note-card-owner";
         card.dataset.noteId = note.noteId;
 
         const meta = noteMeta(note);
@@ -589,9 +589,11 @@ function renderNotes() {
         const files = note.files || [];
         const fileCount = files.length;
         const published = note.visibility === "public";
+        const createdDate = note.publishedAt || note.createdAt;
+
         const sourceListHtml = files.length
             ? `
-                <div class="owner-source-list">
+                <div class="owner-source-list owner-source-list-compact">
                     ${files.map((file) => `
                         <div class="owner-source-row">
                             <div class="owner-source-info">
@@ -611,33 +613,67 @@ function renderNotes() {
                     `).join("")}
                 </div>
             `
-            : "";
+            : '<p class="manage-empty">No source files attached yet.</p>';
 
         card.innerHTML = `
-            <span class="badge">${escapeHtml(note.visibility || "private")}</span>
-            <h3>${escapeHtml(note.title || "Untitled Note")}</h3>
-            <div class="note-meta">${metaHtml}</div>
-            <p class="note-description">${escapeHtml(note.description || "No description yet.")}</p>
-            <div class="note-meta"><span>${fileCount} source file${fileCount === 1 ? "" : "s"}</span></div>
-            ${sourceListHtml}
-            <div class="note-card-footer">
-                <span class="note-date">${escapeHtml(formatDate(note.publishedAt || note.createdAt))}</span>
-                <div class="upload-block">
-                    <span class="upload-status ${escapeHtml(notesState.uploadFeedback[note.noteId]?.type || "")}" data-upload-status>${escapeHtml(notesState.uploadFeedback[note.noteId]?.message || "")}</span>
-                    <div class="note-actions">
-                        <button class="button button-secondary" type="button" data-edit-note>Edit</button>
-                        <button class="button button-secondary" type="button" data-upload-note ${notesState.uploadInProgress ? "disabled" : ""}>${notesState.uploadInProgress ? "Upload in progress…" : "Upload Source"}</button>
-                        <button class="button ${published ? "button-secondary" : "button-primary"}" type="button" data-publish-note>
-                            ${published ? "Unpublish" : "Publish"}
+            <div class="owner-card-header">
+                <span class="badge">${escapeHtml(note.visibility || "private")}</span>
+                <span class="note-date">${escapeHtml(formatDate(createdDate))}</span>
+            </div>
+
+            <div class="owner-card-body">
+                <h3>${escapeHtml(note.title || "Untitled Note")}</h3>
+                <div class="note-meta">${metaHtml}</div>
+                <p class="owner-note-description">${escapeHtml(note.description || "No description yet.")}</p>
+            </div>
+
+            <div class="owner-card-summary">
+                <span>${fileCount} source file${fileCount === 1 ? "" : "s"}</span>
+                <span class="upload-status ${escapeHtml(notesState.uploadFeedback[note.noteId]?.type || "")}" data-upload-status>${escapeHtml(notesState.uploadFeedback[note.noteId]?.message || "")}</span>
+            </div>
+
+            <div class="owner-card-actions">
+                <button class="button button-primary owner-primary-action" type="button" data-edit-note>Edit Note</button>
+                <button class="button button-secondary" type="button" data-publish-note>
+                    ${published ? "Unpublish" : "Publish"}
+                </button>
+                <button class="button button-text manage-toggle" type="button" data-manage-note aria-expanded="false">
+                    Manage ▾
+                </button>
+            </div>
+
+            <div class="owner-manage-panel" data-manage-panel hidden>
+                <div class="owner-manage-section">
+                    <div class="owner-manage-heading">
+                        <div>
+                            <strong>Source files</strong>
+                            <span>${fileCount}/10</span>
+                        </div>
+                        <button class="button button-secondary" type="button" data-upload-note ${notesState.uploadInProgress ? "disabled" : ""}>
+                            ${notesState.uploadInProgress ? "Upload in progress…" : "+ Add Source"}
                         </button>
-                        <button class="button button-danger" type="button" data-delete-note>Delete Note</button>
                     </div>
+                    ${sourceListHtml}
+                </div>
+
+                <div class="owner-danger-row">
+                    <span>Delete this note and all of its source files.</span>
+                    <button class="button button-danger" type="button" data-delete-note>Delete Note</button>
                 </div>
             </div>
         `;
 
         card.querySelector("[data-edit-note]").addEventListener("click", () => {
             startEditNote(note);
+        });
+
+        card.querySelector("[data-manage-note]").addEventListener("click", (event) => {
+            const button = event.currentTarget;
+            const panel = card.querySelector("[data-manage-panel]");
+            const opening = panel.hidden;
+            panel.hidden = !opening;
+            button.setAttribute("aria-expanded", String(opening));
+            button.textContent = opening ? "Manage ▴" : "Manage ▾";
         });
 
         card.querySelectorAll("[data-rename-source]").forEach((button) => {
@@ -665,9 +701,7 @@ function renderNotes() {
         card.querySelectorAll("[data-remove-source]").forEach((button) => {
             button.addEventListener("click", () => {
                 const fileId = button.dataset.fileId;
-                if (fileId) {
-                    deleteSourceFile(note, fileId);
-                }
+                if (fileId) deleteSourceFile(note, fileId);
             });
         });
 
