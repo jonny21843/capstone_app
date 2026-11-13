@@ -302,6 +302,56 @@ Resources:
             Method: GET
             PayloadFormatVersion: "2.0"
 
+  AdminSecurityFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/functions/admin/security/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures: [x86_64]
+      MemorySize: 256
+      Timeout: 15
+      Environment:
+        Variables:
+          NOTES_TABLE: !Ref NotesTable
+          SECURITY_TABLE: !Ref UserSecurityTable
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
+          ADMIN_EMAILS: !Ref AdminEmails
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref NotesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserSecurityTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+                - cognito-idp:AdminEnableUser
+                - cognito-idp:AdminDisableUser
+              Resource: !Sub "arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}"
+      Events:
+        ListSecurity:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotesApi
+            Path: /api/admin/security
+            Method: GET
+            PayloadFormatVersion: "2.0"
+        GetSecurityUser:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotesApi
+            Path: /api/admin/security/{userId}
+            Method: GET
+            PayloadFormatVersion: "2.0"
+        UpdateSecurityUser:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotesApi
+            Path: /api/admin/security/{userId}
+            Method: PATCH
+            PayloadFormatVersion: "2.0"
+
   CreateNoteFunction:
     Type: AWS::Serverless::Function
     Properties:
