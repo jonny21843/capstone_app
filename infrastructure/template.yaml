@@ -486,6 +486,7 @@ Resources:
       Environment:
         Variables:
           NOTES_TABLE: !Ref NotesTable
+          NOTES_BUCKET: !Ref NotesBucket
           COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
       Policies:
         - DynamoDBCrudPolicy:
