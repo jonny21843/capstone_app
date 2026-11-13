@@ -93,6 +93,19 @@ def lambda_handler(event, context):
         key=str.lower,
     )
 
+    subject_topics = {}
+    for note in all_public:
+        subject_value = (note.get("subject") or "").strip()
+        topic_value = (note.get("collection") or "").strip()
+        if not subject_value or not topic_value:
+            continue
+        subject_topics.setdefault(subject_value, set()).add(topic_value)
+
+    subject_topics = {
+        subject_value: sorted(values, key=str.lower)
+        for subject_value, values in subject_topics.items()
+    }
+
     notes = all_public
 
     if query:
@@ -138,6 +151,7 @@ def lambda_handler(event, context):
             "notes": [public_projection(note) for note in page_notes],
             "subjects": subjects,
             "collections": collections,
+            "subjectTopics": subject_topics,
             "page": page,
             "pageSize": page_size,
             "total": total,
