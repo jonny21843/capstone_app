@@ -82,6 +82,52 @@ Resources:
             ModeBlock: true
             Override: true
 
+  CanonicalHostRedirectFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub "${AWS::StackName}-canonical-host"
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Redirect www.joinstudygrounds.com to the canonical apex domain.
+        Runtime: cloudfront-js-2.0
+      FunctionCode: !Sub |
+        function handler(event) {
+          var request = event.request;
+          var host = request.headers.host && request.headers.host.value;
+
+          if (host === '${WwwDomainName}') {
+            var query = request.querystring || {};
+            var pairs = [];
+
+            Object.keys(query).forEach(function (key) {
+              var item = query[key];
+              if (item.multiValue && item.multiValue.length) {
+                item.multiValue.forEach(function (value) {
+                  pairs.push(encodeURIComponent(key) + '=' + encodeURIComponent(value.value));
+                });
+              } else if (item.value !== undefined) {
+                pairs.push(encodeURIComponent(key) + '=' + encodeURIComponent(item.value));
+              }
+            });
+
+            var location = 'https://${DomainName}' + request.uri;
+            if (pairs.length) {
+              location += '?' + pairs.join('&');
+            }
+
+            return {
+              statusCode: 301,
+              statusDescription: 'Moved Permanently',
+              headers: {
+                location: { value: location },
+                'cache-control': { value: 'public, max-age=3600' }
+              }
+            };
+          }
+
+          return request;
+        }
+
   FrontendDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -113,6 +159,9 @@ Resources:
             - HEAD
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
           ResponseHeadersPolicyId: !Ref FrontendResponseHeadersPolicy
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt CanonicalHostRedirectFunction.FunctionARN
         ViewerCertificate:
           AcmCertificateArn: !Ref CertificateArn
           SslSupportMethod: sni-only
