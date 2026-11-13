@@ -343,9 +343,15 @@ Resources:
       Environment:
         Variables:
           NOTES_TABLE: !Ref NotesTable
+          NOTES_BUCKET: !Ref NotesBucket
       Policies:
-        - DynamoDBReadPolicy:
+        - DynamoDBCrudPolicy:
             TableName: !Ref NotesTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObjectTagging
+              Resource: !Sub "${NotesBucket.Arn}/*"
       Events:
         ListNotes:
           Type: HttpApi
