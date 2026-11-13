@@ -8,7 +8,9 @@ import boto3
 
 table = boto3.resource("dynamodb").Table(os.environ["NOTES_TABLE"])
 cognito = boto3.client("cognito-idp")
+s3 = boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-east-2"))
 user_pool_id = os.environ["COGNITO_USER_POOL_ID"]
+bucket_name = os.environ["NOTES_BUCKET"]
 
 
 def json_default(value):
@@ -41,6 +43,49 @@ def current_user_id(event):
 def current_username(event):
     current = claims(event)
     return current.get("username") or current.get("cognito:username")
+
+
+def refresh_malware_scan_statuses(note):
+    files = [dict(item) for item in (note.get("files") or [])]
+    changed = False
+
+    for item in files:
+        current = (item.get("malwareScanStatus") or "").upper()
+        if current == "NO_THREATS_FOUND":
+            continue
+
+        key = item.get("key")
+        if not key:
+            continue
+
+        try:
+            result = s3.get_object_tagging(Bucket=bucket_name, Key=key)
+        except Exception:
+            continue
+
+        tags = {tag.get("Key"): tag.get("Value") for tag in result.get("TagSet", [])}
+        actual = (tags.get("GuardDutyMalwareScanStatus") or "").upper()
+        if actual and actual != current:
+            item["malwareScanStatus"] = actual
+            changed = True
+
+    if changed:
+        now = datetime.now(timezone.utc).isoformat()
+        result = table.update_item(
+            Key={"userId": note["userId"], "noteId": note["noteId"]},
+            UpdateExpression="SET #files = :files, updatedAt = :updated",
+            ExpressionAttributeNames={"#files": "files"},
+            ExpressionAttributeValues={
+                ":files": files,
+                ":updated": now,
+            },
+            ReturnValues="ALL_NEW",
+        )
+        return result.get("Attributes", note)
+
+    refreshed = dict(note)
+    refreshed["files"] = files
+    return refreshed
 
 
 def public_author_for_user(username):
@@ -89,6 +134,7 @@ def lambda_handler(event, context):
     now = datetime.now(timezone.utc).isoformat()
 
     if published:
+        note = refresh_malware_scan_statuses(note)
         if not (note.get("description") or "").strip():
             return response(400, {"error": "Add a description before publishing"})
         files = note.get("files") or []
