@@ -425,11 +425,14 @@ Resources:
         Variables:
           NOTES_TABLE: !Ref NotesTable
           NOTES_BUCKET: !Ref NotesBucket
+          SECURITY_TABLE: !Ref UserSecurityTable
           MAX_FILE_BYTES: 20971520
           MAX_FILES_PER_NOTE: 10
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref NotesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref UserSecurityTable
         - S3CrudPolicy:
             BucketName: !Ref NotesBucket
       Events:
