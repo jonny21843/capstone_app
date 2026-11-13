@@ -21,41 +21,144 @@ let publicTaxonomy = {
     subjectTopics: {}
 };
 
-function setDatalistOptions(id, values) {
-    const list = document.getElementById(id);
-    if (!list) return;
-
-    const unique = [...new Set((values || []).filter(Boolean))]
+function normalizeOptions(values) {
+    return [...new Set((values || []).filter(Boolean))]
         .sort((a, b) => a.localeCompare(b, undefined, {sensitivity: "base"}));
-
-    list.innerHTML = unique
-        .map((value) => `<option value="${escapeHtml(value)}"></option>`)
-        .join("");
 }
 
-function refreshTopicSuggestions() {
+function getSearchSelectValues(type) {
+    if (type === "subject") {
+        return publicTaxonomy.subjects;
+    }
+
     const subject = document.getElementById("note-subject")?.value.trim() || "";
     const subjectKey = Object.keys(publicTaxonomy.subjectTopics || {}).find(
         (key) => key.toLowerCase() === subject.toLowerCase()
     );
 
-    const topics = subjectKey
+    return subjectKey
         ? publicTaxonomy.subjectTopics[subjectKey]
         : publicTaxonomy.topics;
+}
 
-    setDatalistOptions("topic-options", topics);
+function closeSearchSelect(container) {
+    const menu = container?.querySelector(".search-select-menu");
+    const toggle = container?.querySelector(".search-select-toggle");
+    if (menu) menu.hidden = true;
+    if (toggle) toggle.setAttribute("aria-expanded", "false");
+}
+
+function renderSearchSelectOptions(container, forceOpen = false) {
+    if (!container) return;
+
+    const type = container.dataset.searchSelect;
+    const input = container.querySelector("input");
+    const menu = container.querySelector(".search-select-menu");
+    const toggle = container.querySelector(".search-select-toggle");
+    const query = (input?.value || "").trim().toLowerCase();
+
+    const values = normalizeOptions(getSearchSelectValues(type));
+    const filtered = query
+        ? values.filter((value) => value.toLowerCase().includes(query))
+        : values;
+
+    if (!menu || !input) return;
+
+    if (!filtered.length) {
+        menu.innerHTML = `
+            <div class="search-select-empty">
+                No matching existing ${type}. You can keep your custom value.
+            </div>
+        `;
+    } else {
+        menu.innerHTML = filtered
+            .map(
+                (value) => `
+                    <button
+                        class="search-select-option"
+                        type="button"
+                        data-value="${escapeHtml(value)}"
+                    >
+                        ${escapeHtml(value)}
+                    </button>
+                `
+            )
+            .join("");
+
+        menu.querySelectorAll(".search-select-option").forEach((option) => {
+            option.addEventListener("click", () => {
+                input.value = option.dataset.value || "";
+                closeSearchSelect(container);
+
+                if (type === "subject") {
+                    refreshTopicSuggestions();
+                    document.getElementById("note-collection")?.focus();
+                }
+            });
+        });
+    }
+
+    if (forceOpen || document.activeElement === input) {
+        menu.hidden = false;
+        toggle?.setAttribute("aria-expanded", "true");
+    }
+}
+
+function refreshTopicSuggestions() {
+    const topicContainer = document.querySelector('[data-search-select="topic"]');
+    renderSearchSelectOptions(topicContainer, false);
+}
+
+function setupSearchSelects() {
+    document.querySelectorAll(".search-select").forEach((container) => {
+        const input = container.querySelector("input");
+        const toggle = container.querySelector(".search-select-toggle");
+
+        input?.addEventListener("focus", () => renderSearchSelectOptions(container, true));
+        input?.addEventListener("input", () => {
+            renderSearchSelectOptions(container, true);
+            if (container.dataset.searchSelect === "subject") {
+                refreshTopicSuggestions();
+            }
+        });
+
+        toggle?.addEventListener("click", () => {
+            const menu = container.querySelector(".search-select-menu");
+            const isOpen = menu && !menu.hidden;
+
+            document.querySelectorAll(".search-select").forEach((other) => {
+                if (other !== container) closeSearchSelect(other);
+            });
+
+            if (isOpen) {
+                closeSearchSelect(container);
+            } else {
+                renderSearchSelectOptions(container, true);
+                input?.focus();
+            }
+        });
+    });
+
+    document.addEventListener("click", (event) => {
+        document.querySelectorAll(".search-select").forEach((container) => {
+            if (!container.contains(event.target)) {
+                closeSearchSelect(container);
+            }
+        });
+    });
 }
 
 function applyPublicTaxonomy(data) {
     const subjects = [...CURATED_SUBJECTS, ...(data.subjects || [])];
     publicTaxonomy = {
-        subjects: [...new Set(subjects)],
-        topics: data.collections || [],
+        subjects: normalizeOptions(subjects),
+        topics: normalizeOptions(data.collections || []),
         subjectTopics: data.subjectTopics || {}
     };
 
-    setDatalistOptions("subject-options", publicTaxonomy.subjects);
-    refreshTopicSuggestions();
+    document.querySelectorAll(".search-select").forEach((container) => {
+        renderSearchSelectOptions(container, false);
+    });
 }
 
 async function loadPublicTaxonomy() {
@@ -68,7 +171,7 @@ async function loadPublicTaxonomy() {
         if (response.ok) applyPublicTaxonomy(data);
     } catch (error) {
         console.error("Unable to load note taxonomy suggestions:", error);
-        setDatalistOptions("subject-options", CURATED_SUBJECTS);
+        publicTaxonomy.subjects = [...CURATED_SUBJECTS];
     }
 }
 
@@ -1352,8 +1455,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("settings-profile-form").addEventListener("submit", saveSettingsProfile);
     document.getElementById("create-note-form").addEventListener("submit", createNote);
     document.getElementById("note-upload-input").addEventListener("change", handleUploadSelection);
-    document.getElementById("note-subject").addEventListener("input", refreshTopicSuggestions);
-    document.getElementById("note-subject").addEventListener("change", refreshTopicSuggestions);
+    setupSearchSelects();
     document.getElementById("public-search-btn").addEventListener("click", () => {
         notesState.publicPage = 1;
         loadPublicNotes();
