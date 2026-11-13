@@ -94,29 +94,24 @@
                         <div class="form-grid">
                             <label>
                                 Subject
-                                <input id="note-subject" maxlength="100" list="subject-options" placeholder="Technology">
-                                <datalist id="subject-options">
-                                    <option value="Technology">
-                                    <option value="Medicine & Health">
-                                    <option value="Engineering">
-                                    <option value="Science">
-                                    <option value="Space & Astronomy">
-                                    <option value="Psychology">
-                                    <option value="Mathematics">
-                                    <option value="Business & Finance">
-                                    <option value="Law & Government">
-                                    <option value="Education">
-                                    <option value="History">
-                                    <option value="Arts & Humanities">
-                                    <option value="Social Sciences">
-                                    <option value="Languages">
-                                </datalist>
+                                <div class="search-select" data-search-select="subject">
+                                    <div class="search-select-input-row">
+                                        <input id="note-subject" maxlength="100" autocomplete="off" placeholder="Choose or type a subject">
+                                        <button class="search-select-toggle" type="button" aria-label="Show subject options" aria-expanded="false">▾</button>
+                                    </div>
+                                    <div id="subject-options" class="search-select-menu" hidden></div>
+                                </div>
                             </label>
 
                             <label>
                                 Topic
-                                <input id="note-collection" maxlength="120" list="topic-options" placeholder="AWS Cloud Computing">
-                                <datalist id="topic-options"></datalist>
+                                <div class="search-select" data-search-select="topic">
+                                    <div class="search-select-input-row">
+                                        <input id="note-collection" maxlength="120" autocomplete="off" placeholder="Choose or type a topic">
+                                        <button class="search-select-toggle" type="button" aria-label="Show topic options" aria-expanded="false">▾</button>
+                                    </div>
+                                    <div id="topic-options" class="search-select-menu" hidden></div>
+                                </div>
                             </label>
                         </div>
 
