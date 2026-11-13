@@ -1,10 +1,14 @@
 import json
 from decimal import Decimal
+from io import BytesIO
 import os
+from datetime import date, datetime, time
+from zipfile import ZipFile, BadZipFile
 
 import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.config import Config
+from openpyxl import load_workbook
 
 
 table = boto3.resource("dynamodb").Table(os.environ["NOTES_TABLE"])
@@ -17,6 +21,12 @@ s3 = boto3.client(
     endpoint_url=f"https://s3.{aws_region}.amazonaws.com",
     config=Config(signature_version="s3v4"),
 )
+
+MAX_PREVIEW_SHEETS = 5
+MAX_PREVIEW_ROWS = 100
+MAX_PREVIEW_COLUMNS = 30
+MAX_XLSX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
+MAX_XLSX_ZIP_ENTRIES = 5000
 
 
 def json_default(value):
@@ -33,11 +43,7 @@ def response(status_code, body):
     }
 
 
-def lambda_handler(event, context):
-    note_id = (event.get("pathParameters") or {}).get("noteId")
-    if not note_id:
-        return response(400, {"error": "noteId is required"})
-
+def get_public_note(note_id):
     result = table.query(
         IndexName="NoteIdIndex",
         KeyConditionExpression=Key("noteId").eq(note_id),
@@ -45,9 +51,152 @@ def lambda_handler(event, context):
     )
     notes = result.get("Items", [])
     note = notes[0] if notes else None
-
     if not note or note.get("visibility") != "public":
+        return None
+    return note
+
+
+def safe_cell_value(value):
+    if value is None:
+        return ""
+    if isinstance(value, (datetime, date, time)):
+        return value.isoformat()
+    if isinstance(value, (str, int, float, bool)):
+        text = str(value) if isinstance(value, str) else value
+        if isinstance(text, str) and len(text) > 500:
+            return text[:497] + "..."
+        return text
+    return str(value)[:500]
+
+
+def validate_xlsx_archive(data):
+    try:
+        with ZipFile(BytesIO(data)) as archive:
+            entries = archive.infolist()
+            if len(entries) > MAX_XLSX_ZIP_ENTRIES:
+                raise ValueError("Workbook contains too many internal files")
+            total_size = sum(item.file_size for item in entries)
+            if total_size > MAX_XLSX_UNCOMPRESSED_BYTES:
+                raise ValueError("Workbook expands beyond the preview safety limit")
+    except BadZipFile as error:
+        raise ValueError("Workbook is not a valid XLSX file") from error
+
+
+def preview_xlsx(note, file_id):
+    file_record = next(
+        (
+            item
+            for item in (note.get("files") or [])
+            if item.get("fileId") == file_id
+        ),
+        None,
+    )
+    if not file_record:
+        return response(404, {"error": "Source file not found"})
+
+    filename = (file_record.get("filename") or "").lower()
+    content_type = (file_record.get("contentType") or "").lower()
+    is_xlsx = (
+        filename.endswith(".xlsx")
+        or content_type
+        == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    if not is_xlsx:
+        return response(400, {"error": "Native preview is currently available for XLSX files only"})
+
+    obj = s3.get_object(Bucket=bucket_name, Key=file_record["key"])
+    data = obj["Body"].read()
+    validate_xlsx_archive(data)
+
+    workbook = load_workbook(
+        BytesIO(data),
+        read_only=True,
+        data_only=True,
+        keep_links=False,
+    )
+
+    sheets = []
+    sheet_names = workbook.sheetnames[:MAX_PREVIEW_SHEETS]
+
+    for sheet_name in sheet_names:
+        sheet = workbook[sheet_name]
+        rows = []
+        max_seen_column = 0
+
+        for row_index, row in enumerate(
+            sheet.iter_rows(
+                min_row=1,
+                max_row=MAX_PREVIEW_ROWS,
+                max_col=MAX_PREVIEW_COLUMNS,
+                values_only=True,
+            ),
+            start=1,
+        ):
+            values = [safe_cell_value(value) for value in row]
+            while values and values[-1] == "":
+                values.pop()
+
+            if values:
+                max_seen_column = max(max_seen_column, len(values))
+            rows.append(values)
+
+        while rows and not rows[-1]:
+            rows.pop()
+
+        sheets.append(
+            {
+                "name": sheet_name,
+                "rows": rows,
+                "columnCount": max_seen_column,
+                "truncated": (
+                    sheet.max_row > MAX_PREVIEW_ROWS
+                    or sheet.max_column > MAX_PREVIEW_COLUMNS
+                ),
+            }
+        )
+
+    return response(
+        200,
+        {
+            "preview": {
+                "filename": file_record.get("filename"),
+                "sheets": sheets,
+                "sheetCount": len(workbook.sheetnames),
+                "previewedSheetCount": len(sheet_names),
+                "limits": {
+                    "rowsPerSheet": MAX_PREVIEW_ROWS,
+                    "columnsPerSheet": MAX_PREVIEW_COLUMNS,
+                    "sheets": MAX_PREVIEW_SHEETS,
+                },
+            }
+        },
+    )
+
+
+def lambda_handler(event, context):
+    params = event.get("pathParameters") or {}
+    note_id = params.get("noteId")
+    if not note_id:
+        return response(400, {"error": "noteId is required"})
+
+    note = get_public_note(note_id)
+    if not note:
         return response(404, {"error": "Public note not found"})
+
+    file_id = params.get("fileId")
+    if file_id:
+        try:
+            return preview_xlsx(note, file_id)
+        except ValueError as error:
+            return response(400, {"error": str(error)})
+        except Exception as error:
+            return response(
+                500,
+                {
+                    "error": "Unable to build workbook preview",
+                    "detail": f"{type(error).__name__}: {error}",
+                },
+            )
 
     try:
         view_result = table.update_item(
@@ -77,7 +226,7 @@ def lambda_handler(event, context):
                 "Key": file_record["key"],
                 "ResponseContentDisposition": "inline",
             },
-            ExpiresIn=3600,
+            ExpiresIn=600,
         )
         download_url = s3.generate_presigned_url(
             "get_object",
@@ -97,8 +246,7 @@ def lambda_handler(event, context):
                 "uploadedAt": file_record.get("uploadedAt"),
                 "viewUrl": view_url,
                 "downloadUrl": download_url,
-                "expiresIn": 3600,
-                "downloadExpiresIn": 600,
+                "expiresIn": 600,
             }
         )
 
