@@ -2,6 +2,7 @@ import json
 from decimal import Decimal
 from io import BytesIO
 import os
+import tempfile
 from datetime import date, datetime, time
 from zipfile import ZipFile, BadZipFile
 import re
@@ -11,6 +12,7 @@ import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.config import Config
 from openpyxl import load_workbook
+from pages import Document as PagesDocument
 
 
 table = boto3.resource("dynamodb").Table(os.environ["NOTES_TABLE"])
@@ -31,6 +33,15 @@ MAX_XLSX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
 MAX_XLSX_ZIP_ENTRIES = 5000
 MAX_PPTX_SLIDES = 60
 MAX_PPTX_TEXT_PER_SLIDE = 12000
+MAX_DOCX_BLOCKS = 400
+MAX_DOCX_TEXT = 100000
+MAX_DOCX_TABLE_ROWS = 100
+MAX_DOCX_TABLE_COLUMNS = 20
+MAX_PAGES_PARAGRAPHS = 400
+MAX_PAGES_TEXT = 100000
+MAX_PAGES_TABLES = 20
+MAX_PAGES_TABLE_ROWS = 100
+MAX_PAGES_TABLE_COLUMNS = 20
 
 
 def json_default(value):
@@ -283,6 +294,221 @@ def preview_pptx(note, file_id):
     )
 
 
+def file_for_preview(note, file_id):
+    return next(
+        (item for item in (note.get("files") or []) if item.get("fileId") == file_id),
+        None,
+    )
+
+
+def preview_docx(note, file_id):
+    file_record = file_for_preview(note, file_id)
+    if not file_record:
+        return response(404, {"error": "Source file not found"})
+
+    filename = (file_record.get("filename") or "").lower()
+    content_type = (file_record.get("contentType") or "").lower()
+    if not (
+        filename.endswith(".docx")
+        or content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ):
+        return response(400, {"error": "Native preview is currently available for DOCX files only"})
+
+    data = s3.get_object(Bucket=bucket_name, Key=file_record["key"])["Body"].read()
+
+    try:
+        with ZipFile(BytesIO(data)) as archive:
+            entries = archive.infolist()
+            if len(entries) > MAX_XLSX_ZIP_ENTRIES:
+                raise ValueError("Document contains too many internal files")
+            if sum(item.file_size for item in entries) > MAX_XLSX_UNCOMPRESSED_BYTES:
+                raise ValueError("Document expands beyond the preview safety limit")
+            if "word/document.xml" not in archive.namelist():
+                raise ValueError("Document is not a valid DOCX file")
+            root = ET.fromstring(archive.read("word/document.xml"))
+    except BadZipFile as error:
+        raise ValueError("Document is not a valid DOCX file") from error
+
+    namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    blocks = []
+    text_count = 0
+    truncated = False
+
+    body = root.find("w:body", namespace)
+    if body is None:
+        body = root
+
+    for child in list(body):
+        if len(blocks) >= MAX_DOCX_BLOCKS or text_count >= MAX_DOCX_TEXT:
+            truncated = True
+            break
+
+        if child.tag.endswith("}p"):
+            texts = [
+                node.text or ""
+                for node in child.findall(".//w:t", namespace)
+            ]
+            text = "".join(texts).strip()
+            if not text:
+                continue
+
+            style_node = child.find("w:pPr/w:pStyle", namespace)
+            style = ""
+            if style_node is not None:
+                style = style_node.attrib.get(f"{{{namespace['w']}}}val", "")
+
+            kind = "paragraph"
+            heading_level = None
+            match = re.fullmatch(r"Heading(\d+)", style, re.IGNORECASE)
+            if match:
+                heading_level = min(max(int(match.group(1)), 1), 6)
+                kind = "heading"
+            elif style.lower() in {"title", "subtitle"}:
+                kind = style.lower()
+
+            text_count += len(text)
+            blocks.append(
+                {
+                    "type": kind,
+                    "text": text[:4000],
+                    "headingLevel": heading_level,
+                }
+            )
+
+        elif child.tag.endswith("}tbl"):
+            rows = []
+            for row in child.findall("w:tr", namespace)[:MAX_DOCX_TABLE_ROWS]:
+                cells = []
+                for cell in row.findall("w:tc", namespace)[:MAX_DOCX_TABLE_COLUMNS]:
+                    cell_text = " ".join(
+                        (node.text or "").strip()
+                        for node in cell.findall(".//w:t", namespace)
+                        if (node.text or "").strip()
+                    )
+                    cells.append(cell_text[:1000])
+                rows.append(cells)
+
+            blocks.append(
+                {
+                    "type": "table",
+                    "rows": rows,
+                    "truncated": (
+                        len(child.findall("w:tr", namespace)) > MAX_DOCX_TABLE_ROWS
+                        or any(
+                            len(row.findall("w:tc", namespace)) > MAX_DOCX_TABLE_COLUMNS
+                            for row in child.findall("w:tr", namespace)
+                        )
+                    ),
+                }
+            )
+
+    return response(
+        200,
+        {
+            "preview": {
+                "type": "docx",
+                "filename": file_record.get("filename"),
+                "blocks": blocks,
+                "truncated": truncated,
+            }
+        },
+    )
+
+
+def preview_pages(note, file_id):
+    file_record = file_for_preview(note, file_id)
+    if not file_record:
+        return response(404, {"error": "Source file not found"})
+
+    filename = (file_record.get("filename") or "").lower()
+    if not filename.endswith(".pages"):
+        return response(400, {"error": "Native preview is currently available for Pages files only"})
+
+    data = s3.get_object(Bucket=bucket_name, Key=file_record["key"])["Body"].read()
+
+    with tempfile.NamedTemporaryFile(suffix=".pages", delete=True) as temp_file:
+        temp_file.write(data)
+        temp_file.flush()
+        try:
+            document = PagesDocument(temp_file.name)
+        except Exception as error:
+            raise ValueError("Pages preview is unavailable for this document version") from error
+
+        blocks = []
+        total_text = 0
+        truncated = False
+
+        for paragraph in list(document.paragraphs)[:MAX_PAGES_PARAGRAPHS]:
+            text = (paragraph.text or "").strip()
+            if not text:
+                continue
+
+            if total_text + len(text) > MAX_PAGES_TEXT:
+                truncated = True
+                break
+
+            style_name = ""
+            try:
+                style = getattr(paragraph, "style", None)
+                style_name = getattr(style, "name", "") or str(style or "")
+            except Exception:
+                style_name = ""
+
+            kind = "paragraph"
+            heading_level = None
+            lowered = style_name.lower()
+            match = re.search(r"heading\s*(\d+)?", lowered)
+            if match:
+                kind = "heading"
+                heading_level = int(match.group(1) or 1)
+            elif "title" in lowered:
+                kind = "title"
+
+            blocks.append(
+                {
+                    "type": kind,
+                    "text": text[:4000],
+                    "headingLevel": heading_level,
+                }
+            )
+            total_text += len(text)
+
+        for table_index, table in enumerate(list(document.tables)[:MAX_PAGES_TABLES], start=1):
+            rows = []
+            table_rows = list(table.rows)
+            for row in table_rows[:MAX_PAGES_TABLE_ROWS]:
+                cells = [
+                    (getattr(cell, "text", "") or "")[:1000]
+                    for cell in list(row.cells)[:MAX_PAGES_TABLE_COLUMNS]
+                ]
+                rows.append(cells)
+
+            blocks.append(
+                {
+                    "type": "table",
+                    "label": f"Table {table_index}",
+                    "rows": rows,
+                    "truncated": (
+                        len(table_rows) > MAX_PAGES_TABLE_ROWS
+                        or any(len(list(row.cells)) > MAX_PAGES_TABLE_COLUMNS for row in table_rows)
+                    ),
+                }
+            )
+
+    return response(
+        200,
+        {
+            "preview": {
+                "type": "pages",
+                "filename": file_record.get("filename"),
+                "blocks": blocks,
+                "truncated": truncated or len(getattr(document, "paragraphs", [])) > MAX_PAGES_PARAGRAPHS,
+                "bestEffort": True,
+            }
+        },
+    )
+
+
 def lambda_handler(event, context):
     params = event.get("pathParameters") or {}
     note_id = params.get("noteId")
@@ -313,6 +539,16 @@ def lambda_handler(event, context):
                 == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
             ):
                 return preview_pptx(note, file_id)
+
+            if (
+                filename.endswith(".docx")
+                or content_type
+                == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ):
+                return preview_docx(note, file_id)
+
+            if filename.endswith(".pages"):
+                return preview_pages(note, file_id)
 
             return preview_xlsx(note, file_id)
         except ValueError as error:
