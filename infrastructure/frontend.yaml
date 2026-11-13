@@ -14,6 +14,11 @@ Parameters:
     Type: String
     Default: www.joinstudygrounds.com
 
+  ApiDomainName:
+    Type: String
+    Default: nxa9uz2cv0.execute-api.us-east-2.amazonaws.com
+    Description: API Gateway hostname used for crawlable public note pages and the dynamic sitemap.
+
 Resources:
   FrontendBucket:
     Type: AWS::S3::Bucket
@@ -82,6 +87,25 @@ Resources:
             ModeBlock: true
             Override: true
 
+  SeoCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: !Sub "${AWS::StackName}-public-seo"
+        Comment: Short-lived cache for public note HTML and sitemap responses.
+        DefaultTTL: 300
+        MaxTTL: 600
+        MinTTL: 0
+        ParametersInCacheKeyAndForwardedToOrigin:
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          CookiesConfig:
+            CookieBehavior: none
+          HeadersConfig:
+            HeaderBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: none
+
   CanonicalHostRedirectFunction:
     Type: AWS::CloudFront::Function
     Properties:
@@ -146,6 +170,47 @@ Resources:
             DomainName: !GetAtt FrontendBucket.RegionalDomainName
             S3OriginConfig: {}
             OriginAccessControlId: !GetAtt FrontendOriginAccessControl.Id
+          - Id: PublicSeoApiOrigin
+            DomainName: !Ref ApiDomainName
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols:
+                - TLSv1.2
+        CacheBehaviors:
+          - PathPattern: "notes/*"
+            TargetOriginId: PublicSeoApiOrigin
+            ViewerProtocolPolicy: redirect-to-https
+            Compress: true
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            CachedMethods:
+              - GET
+              - HEAD
+            CachePolicyId: !Ref SeoCachePolicy
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+            ResponseHeadersPolicyId: !Ref FrontendResponseHeadersPolicy
+            FunctionAssociations:
+              - EventType: viewer-request
+                FunctionARN: !GetAtt CanonicalHostRedirectFunction.FunctionARN
+          - PathPattern: "sitemap.xml"
+            TargetOriginId: PublicSeoApiOrigin
+            ViewerProtocolPolicy: redirect-to-https
+            Compress: true
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            CachedMethods:
+              - GET
+              - HEAD
+            CachePolicyId: !Ref SeoCachePolicy
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+            ResponseHeadersPolicyId: !Ref FrontendResponseHeadersPolicy
+            FunctionAssociations:
+              - EventType: viewer-request
+                FunctionARN: !GetAtt CanonicalHostRedirectFunction.FunctionARN
         DefaultCacheBehavior:
           TargetOriginId: FrontendS3Origin
           ViewerProtocolPolicy: redirect-to-https
