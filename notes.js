@@ -119,11 +119,97 @@ function setupSearchSelects() {
         const input = container.querySelector("input");
         const toggle = container.querySelector(".search-select-toggle");
 
-        input?.addEventListener("focus", () => renderSearchSelectOptions(container, true));
-        input?.addEventListener("input", () => {
-            renderSearchSelectOptions(container, true);
+        const options = () => [...container.querySelectorAll(".search-select-option")];
+
+        const setActiveOption = (index) => {
+            const items = options();
+            if (!items.length) return;
+
+            items.forEach((item, itemIndex) => {
+                const active = itemIndex === index;
+                item.classList.toggle("keyboard-active", active);
+                item.setAttribute("aria-selected", String(active));
+            });
+
+            items[index]?.scrollIntoView({block: "nearest"});
+        };
+
+        const activeOptionIndex = () => {
+            const items = options();
+            const index = items.findIndex((item) => item.classList.contains("keyboard-active"));
+            return index >= 0 ? index : 0;
+        };
+
+        const commitOption = (option) => {
+            if (!option || !input) return false;
+
+            input.value = option.dataset.value || "";
+            closeSearchSelect(container);
+
             if (container.dataset.searchSelect === "subject") {
                 refreshTopicSuggestions();
+            }
+
+            return true;
+        };
+
+        input?.addEventListener("focus", () => {
+            renderSearchSelectOptions(container, true);
+            setActiveOption(0);
+        });
+
+        input?.addEventListener("input", () => {
+            renderSearchSelectOptions(container, true);
+            setActiveOption(0);
+
+            if (container.dataset.searchSelect === "subject") {
+                refreshTopicSuggestions();
+            }
+        });
+
+        input?.addEventListener("keydown", (event) => {
+            const menu = container.querySelector(".search-select-menu");
+            const items = options();
+
+            if (event.key === "ArrowDown") {
+                event.preventDefault();
+                if (menu?.hidden) renderSearchSelectOptions(container, true);
+                const next = Math.min(activeOptionIndex() + 1, Math.max(items.length - 1, 0));
+                setActiveOption(next);
+                return;
+            }
+
+            if (event.key === "ArrowUp") {
+                event.preventDefault();
+                if (menu?.hidden) renderSearchSelectOptions(container, true);
+                const next = Math.max(activeOptionIndex() - 1, 0);
+                setActiveOption(next);
+                return;
+            }
+
+            if (event.key === "Enter") {
+                if (!menu?.hidden && items.length) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    commitOption(items[activeOptionIndex()] || items[0]);
+
+                    if (container.dataset.searchSelect === "subject") {
+                        document.getElementById("note-collection")?.focus();
+                    }
+                }
+                return;
+            }
+
+            if (event.key === "Tab") {
+                if (!menu?.hidden && items.length) {
+                    commitOption(items[activeOptionIndex()] || items[0]);
+                }
+                return;
+            }
+
+            if (event.key === "Escape") {
+                event.preventDefault();
+                closeSearchSelect(container);
             }
         });
 
@@ -139,6 +225,7 @@ function setupSearchSelects() {
                 closeSearchSelect(container);
             } else {
                 renderSearchSelectOptions(container, true);
+                setActiveOption(0);
                 input?.focus();
             }
         });
