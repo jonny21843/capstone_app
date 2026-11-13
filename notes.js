@@ -456,6 +456,15 @@ function noteMeta(note) {
     return [note.subject, note.collection].filter(Boolean);
 }
 
+function fileSecurityLabel(file) {
+    const status = (file?.malwareScanStatus || "").toUpperCase();
+    if (!status) return "Legacy source";
+    if (status === "NO_THREATS_FOUND") return "Security scan passed";
+    if (status === "PENDING") return "Security scan in progress";
+    if (status === "THREATS_FOUND") return "Blocked: threat detected";
+    return "Blocked: scan could not be verified";
+}
+
 function setUploadFeedback(noteId, message, type = "") {
     notesState.uploadFeedback[noteId] = {message: message || "", type};
     const status = findUploadStatus(noteId);
@@ -816,6 +825,12 @@ function renderNotes() {
         const files = note.files || [];
         const fileCount = files.length;
         const published = note.visibility === "public";
+        const pendingSecurityScan = files.some((file) => file.malwareScanStatus === "PENDING");
+        const failedSecurityScan = files.some((file) => {
+            const status = file.malwareScanStatus;
+            return status && status !== "PENDING" && status !== "NO_THREATS_FOUND";
+        });
+        const publishBlocked = !published && (pendingSecurityScan || failedSecurityScan);
         const createdDate = note.publishedAt || note.createdAt;
 
         const sourceListHtml = files.length
@@ -827,7 +842,7 @@ function renderNotes() {
                                 <span title="${escapeHtml(file.filename || "Source file")}">
                                     ${escapeHtml(file.filename || "Source file")}
                                 </span>
-                                <small>${escapeHtml(formatBytes(file.sizeBytes))}</small>
+                                <small>${escapeHtml(formatBytes(file.sizeBytes))} · ${escapeHtml(fileSecurityLabel(file))}</small>
                             </div>
                             <div class="source-actions">
                                 <button class="button button-mini" type="button" data-move-source="up" data-file-id="${escapeHtml(file.fileId || "")}" title="Move up">↑</button>
@@ -861,7 +876,12 @@ function renderNotes() {
 
             <div class="owner-card-actions">
                 <button class="button button-primary owner-primary-action" type="button" data-edit-note>Edit Note</button>
-                <button class="button button-secondary" type="button" data-publish-note>
+                <button
+                    class="button button-secondary"
+                    type="button"
+                    data-publish-note
+                    ${publishBlocked ? 'disabled title="Wait for all source security scans to pass before publishing."' : ""}
+                >
                     ${published ? "Unpublish" : "Publish"}
                 </button>
                 <button class="button button-text manage-toggle" type="button" data-manage-note aria-expanded="false">
@@ -1183,7 +1203,12 @@ async function uploadFileForNote(file, noteId, replaceFileId = null, statusOverr
         const registered = await registerResponse.json();
         if (!registerResponse.ok) throw new Error(registered.error || "Uploaded, but could not register file.");
 
-        updateStatus(replaceFileId ? "Replaced successfully" : "Uploaded successfully", "success");
+        updateStatus(
+            replaceFileId
+                ? "Replaced. Security scan in progress…"
+                : "Uploaded. Security scan in progress…",
+            "success"
+        );
         await loadNotes();
         return true;
     } catch (error) {
