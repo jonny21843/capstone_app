@@ -263,6 +263,7 @@ Resources:
       Environment:
         Variables:
           NOTES_TABLE: !Ref NotesTable
+          NOTES_BUCKET: !Ref NotesBucket
           COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
           ADMIN_EMAILS: !Ref AdminEmails
       Policies:
@@ -494,6 +495,10 @@ Resources:
               Action:
                 - cognito-idp:AdminGetUser
               Resource: !Sub "arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}"
+            - Effect: Allow
+              Action:
+                - s3:GetObjectTagging
+              Resource: !Sub "${NotesBucket.Arn}/*"
       Events:
         PublishNote:
           Type: HttpApi
