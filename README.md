@@ -1,8 +1,8 @@
-# Notes App
+# StudyGrounds
 
-This repository is being rebuilt from the original graduate capstone into a personal notes and study platform.
+This repository is being rebuilt from the original graduate capstone into a study-material publishing and discovery platform.
 
-The long-term goal is to let users upload and organize notes, convert handwritten notes to searchable text, create quizzes and flashcards, and share study material with other users.
+StudyGrounds lets users upload, organize, publish, and discover study material. Longer-term plans include searchable text extraction, quizzes, flashcards, and additional study tools.
 
 ## Current direction
 
@@ -20,7 +20,7 @@ The previous EC2, Nginx, Flask, systemd, VPC, and Cloudflare Zero Trust deployme
 
 ## Authentication milestone
 
-The current feature branch implements the first authentication milestone:
+Authentication uses Cognito managed login with OAuth authorization code + PKCE:
 
 1. The browser starts Cognito managed login with OAuth authorization code + PKCE.
 2. Cognito redirects back to `/auth/callback.html`.
