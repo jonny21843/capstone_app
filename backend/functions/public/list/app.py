@@ -76,6 +76,8 @@ def lambda_handler(event, context):
 
         scan_args["ExclusiveStartKey"] = last_key
 
+    all_public = [note for note in all_public if note.get("files")]
+
     subjects = sorted(
         {
             (note.get("subject") or "").strip()
