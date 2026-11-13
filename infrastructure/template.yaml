@@ -338,8 +338,8 @@ Resources:
       Handler: app.lambda_handler
       Runtime: python3.12
       Architectures: [x86_64]
-      MemorySize: 128
-      Timeout: 5
+      MemorySize: 256
+      Timeout: 15
       Environment:
         Variables:
           NOTES_TABLE: !Ref NotesTable
@@ -465,6 +465,15 @@ Resources:
           Properties:
             ApiId: !Ref NotesApi
             Path: /api/public/notes/{noteId}
+            Method: GET
+            PayloadFormatVersion: "2.0"
+            Auth:
+              Authorizer: NONE
+        PublicNoteFilePreview:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotesApi
+            Path: /api/public/notes/{noteId}/files/{fileId}/preview
             Method: GET
             PayloadFormatVersion: "2.0"
             Auth:
