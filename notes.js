@@ -490,15 +490,16 @@ function validateSourceFile(file) {
     return null;
 }
 
-function renderEmbeddedSource(file) {
+function renderEmbeddedSource(file, index = 0) {
     const contentType = (file.contentType || "").toLowerCase();
     const filename = (file.filename || "").toLowerCase();
     const url = escapeHtml(file.viewUrl);
     const name = escapeHtml(file.filename || "Source file");
+    const sourceId = `source-${escapeHtml(file.fileId || String(index + 1))}`;
 
     if (contentType === "application/pdf" || filename.endsWith(".pdf")) {
         return `
-            <section class="source-viewer-card">
+            <section id="${sourceId}" class="source-viewer-card">
                 <div class="source-viewer-header">
                     <div>
                         <h3>${name}</h3>
@@ -519,7 +520,7 @@ function renderEmbeddedSource(file) {
 
     if (contentType.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/.test(filename)) {
         return `
-            <section class="source-viewer-card">
+            <section id="${sourceId}" class="source-viewer-card">
                 <div class="source-viewer-header">
                     <div>
                         <h3>${name}</h3>
@@ -542,7 +543,7 @@ function renderEmbeddedSource(file) {
         /\.(ppt|pptx)$/.test(filename);
 
     return `
-        <section class="source-viewer-card">
+        <section id="${sourceId}" class="source-viewer-card">
             <div class="source-viewer-header">
                 <div>
                     <h3>${name}</h3>
@@ -1461,6 +1462,7 @@ async function openPublicNote(noteId, updateUrl = true) {
 
         const note = data.note;
         const files = note.files || [];
+        const publishedDate = formatDate(note.publishedAt);
 
         if (updateUrl) {
             const url = new URL(window.location.href);
@@ -1468,27 +1470,60 @@ async function openPublicNote(noteId, updateUrl = true) {
             window.history.replaceState({}, "", url);
         }
 
+        const sourceIndex = files.length > 1
+            ? `
+                <nav class="public-source-index" aria-label="Source files">
+                    ${files.map((file, index) => {
+                        const sourceId = `source-${escapeHtml(file.fileId || String(index + 1))}`;
+                        return `
+                            <a href="#${sourceId}" class="public-source-index-item">
+                                <span>${index + 1}</span>
+                                <strong>${escapeHtml(file.filename || `Source ${index + 1}`)}</strong>
+                            </a>
+                        `;
+                    }).join("")}
+                </nav>
+            `
+            : "";
+
         content.innerHTML = `
-            <p class="eyebrow">Published note</p>
-            <h2>${escapeHtml(note.title)}</h2>
-            <div class="note-meta">
-                ${[note.subject, note.collection].filter(Boolean).map((item) => `<span>${escapeHtml(item)}</span>`).join("<span>·</span>")}
-            </div>
-            <p class="note-description">${escapeHtml(note.description || "")}</p>
-            <div class="note-meta">
-                <span>Posted by ${escapeHtml(note.publicAuthor || "Community member")}</span>
-                <span>·</span>
-                <span>${Number(note.viewCount || 0)} views</span>
-            </div>
-            <div class="public-detail-actions">
-                <button id="share-public-note" class="button button-secondary" type="button">Copy Share Link</button>
-            </div>
-            <h3>Source notes</h3>
-            <div class="source-viewer-list">
-                ${files.length
-                    ? files.map((file) => renderEmbeddedSource(file)).join("")
-                    : '<p class="note-description">No source files are available for this note.</p>'}
-            </div>
+            <section class="public-note-hero">
+                <div class="public-note-hero-main">
+                    <div class="public-note-taxonomy">
+                        ${note.subject ? `<span class="subject-chip">${escapeHtml(note.subject)}</span>` : ""}
+                        ${note.collection ? `<span class="public-topic-label">${escapeHtml(note.collection)}</span>` : ""}
+                    </div>
+                    <h2>${escapeHtml(note.title)}</h2>
+                    <p class="public-note-full-description">${escapeHtml(note.description || "No description provided.")}</p>
+                </div>
+
+                <div class="public-note-hero-side">
+                    <div class="public-note-byline">
+                        <strong>${escapeHtml(note.publicAuthor || "Community member")}</strong>
+                        <span>${Number(note.viewCount || 0)} view${Number(note.viewCount || 0) === 1 ? "" : "s"}</span>
+                        ${publishedDate ? `<span>Published ${escapeHtml(publishedDate)}</span>` : ""}
+                    </div>
+                    <button id="share-public-note" class="button button-secondary" type="button">Copy Share Link</button>
+                </div>
+            </section>
+
+            <section class="public-sources-section">
+                <div class="public-sources-heading">
+                    <div>
+                        <p class="eyebrow">Source material</p>
+                        <h3>${files.length} source file${files.length === 1 ? "" : "s"}</h3>
+                    </div>
+                    ${files.length > 1 ? '<span class="status-text">Jump to a source below</span>' : ""}
+                </div>
+
+                ${sourceIndex}
+
+                <div class="source-viewer-list">
+                    ${files.length
+                        ? files.map((file, index) => renderEmbeddedSource(file, index)).join("")
+                        : '<p class="note-description">No source files are available for this note.</p>'}
+                </div>
+            </section>
         `;
 
         grid.hidden = true;
