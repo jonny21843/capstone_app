@@ -187,6 +187,14 @@ def register_file(user_id, note_id, payload):
         s3.delete_object(Bucket=bucket_name, Key=key)
         return response(400, {"error": "Uploaded file contents do not match the declared file type"})
 
+    scan_status = "PENDING"
+    try:
+        tag_result = s3.get_object_tagging(Bucket=bucket_name, Key=key)
+        tags = {item.get("Key"): item.get("Value") for item in tag_result.get("TagSet", [])}
+        scan_status = (tags.get("GuardDutyMalwareScanStatus") or "PENDING").upper()
+    except ClientError:
+        scan_status = "PENDING"
+
     now = datetime.now(timezone.utc).isoformat()
     file_record = {
         "fileId": replace_file_id or str(uuid.uuid4()),
@@ -195,6 +203,7 @@ def register_file(user_id, note_id, payload):
         "contentType": actual_type,
         "sizeBytes": actual_size,
         "uploadedAt": now,
+        "malwareScanStatus": scan_status,
     }
 
     try:
