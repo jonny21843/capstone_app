@@ -21,9 +21,7 @@ ALLOWED_TYPES = {
     "image/jpeg",
     "image/png",
     "image/webp",
-    "application/vnd.ms-powerpoint",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "application/vnd.ms-excel",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }
 
@@ -32,13 +30,10 @@ EXTENSIONS_BY_TYPE = {
     "image/jpeg": {".jpg", ".jpeg"},
     "image/png": {".png"},
     "image/webp": {".webp"},
-    "application/vnd.ms-powerpoint": {".ppt"},
     "application/vnd.openxmlformats-officedocument.presentationml.presentation": {".pptx"},
-    "application/vnd.ms-excel": {".xls"},
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {".xlsx"},
 }
 
-OLE_SIGNATURE = bytes.fromhex("D0CF11E0A1B11AE1")
 
 
 def json_default(value):
@@ -85,9 +80,6 @@ def validate_file_signature(key, content_type):
 
     if content_type == "image/webp":
         return len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP"
-
-    if content_type in {"application/vnd.ms-powerpoint", "application/vnd.ms-excel"}:
-        return data.startswith(OLE_SIGNATURE)
 
     if content_type in {
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
