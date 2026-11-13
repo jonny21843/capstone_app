@@ -55,7 +55,7 @@ def get_public_note(note_id):
     )
     notes = result.get("Items", [])
     note = notes[0] if notes else None
-    if not note or note.get("visibility") != "public":
+    if not note or note.get("visibility") != "public" or not note.get("files"):
         return None
     return note
 
