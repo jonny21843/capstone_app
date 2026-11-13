@@ -187,6 +187,7 @@ const notesState = {
     activeView: "my-notes",
     uploadInProgress: false,
     createInProgress: false,
+    scanRefreshTimer: null,
     replaceFileId: null,
     publicPage: 1,
     publicTotalPages: 1,
@@ -421,6 +422,21 @@ function setCreateStatus(message, type = "") {
     const element = document.getElementById("create-note-status");
     element.textContent = message || "";
     element.className = `status-text ${type}`.trim();
+}
+
+function showAppNotice(message) {
+    const existing = document.querySelector(".app-notice-toast");
+    if (existing) existing.remove();
+
+    const toast = document.createElement("div");
+    toast.className = "app-notice-toast";
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    window.setTimeout(() => {
+        toast.classList.add("leaving");
+        window.setTimeout(() => toast.remove(), 220);
+    }, 4200);
 }
 
 function formatBytes(value) {
@@ -831,7 +847,15 @@ function renderNotes() {
             const status = file.malwareScanStatus;
             return status && status !== "PENDING" && status !== "NO_THREATS_FOUND";
         });
-        const publishBlocked = !published && (pendingSecurityScan || failedSecurityScan);
+        const queuedForPublish = Boolean(note.publishPending);
+        const publishBlocked = !published && failedSecurityScan;
+        const securityStatusText = queuedForPublish
+            ? "Will publish automatically after scan"
+            : pendingSecurityScan
+                ? "Security scan in progress"
+                : failedSecurityScan
+                    ? "Security scan failed"
+                    : "";
         const createdDate = note.publishedAt || note.createdAt;
 
         const sourceListHtml = files.length
@@ -872,7 +896,7 @@ function renderNotes() {
 
             <div class="owner-card-summary">
                 <span>${fileCount} source file${fileCount === 1 ? "" : "s"}</span>
-                <span class="upload-status ${escapeHtml(notesState.uploadFeedback[note.noteId]?.type || "")}" data-upload-status>${escapeHtml(notesState.uploadFeedback[note.noteId]?.message || "")}</span>
+                <span class="upload-status ${escapeHtml(notesState.uploadFeedback[note.noteId]?.type || "")}" data-upload-status>${escapeHtml(notesState.uploadFeedback[note.noteId]?.message || securityStatusText)}</span>
             </div>
 
             <div class="owner-card-actions">
@@ -881,9 +905,11 @@ function renderNotes() {
                     class="button button-secondary"
                     type="button"
                     data-publish-note
-                    ${publishBlocked ? 'disabled title="Wait for all source security scans to pass before publishing."' : ""}
+                    ${(publishBlocked || queuedForPublish) ? 'disabled' : ""}
+                    ${publishBlocked ? 'title="This source did not pass its security scan."' : ""}
+                    ${queuedForPublish ? 'title="This note will publish automatically when the security scan passes."' : ""}
                 >
-                    ${published ? "Unpublish" : "Publish"}
+                    ${published ? "Unpublish" : queuedForPublish ? "Publishing after scan…" : "Publish"}
                 </button>
                 <button class="button button-text manage-toggle" type="button" data-manage-note aria-expanded="false">
                     Manage ▾
@@ -1006,6 +1032,23 @@ async function loadNotes() {
         const data = await response.json();
         notesState.notes = data.notes || [];
         renderNotes();
+
+        if (notesState.scanRefreshTimer) {
+            window.clearTimeout(notesState.scanRefreshTimer);
+            notesState.scanRefreshTimer = null;
+        }
+
+        const hasPendingScan = notesState.notes.some((note) =>
+            Boolean(note.publishPending) ||
+            (note.files || []).some((file) => file.malwareScanStatus === "PENDING")
+        );
+
+        if (hasPendingScan) {
+            notesState.scanRefreshTimer = window.setTimeout(() => {
+                notesState.scanRefreshTimer = null;
+                if (isAuthenticated()) loadNotes();
+            }, 4000);
+        }
     } catch (error) {
         console.error("Unable to load notes:", error);
         setNotesStatus(error.message || "Unable to load your notes.", true);
@@ -1108,6 +1151,14 @@ async function createNote(event) {
                 document.getElementById("note-form-submit").textContent = "Save Changes";
                 throw new Error(publishData.error || "Note saved, but could not be published.");
             }
+
+            if (publishData.publishPending) {
+                showAppNotice("Note saved. Your file is being security scanned and will publish automatically when the scan passes.");
+            } else {
+                showAppNotice("Note saved and published.");
+            }
+        } else if (sourceFile && targetNoteId) {
+            showAppNotice("Note saved. Your file is being security scanned; you can publish it once the scan passes.");
         }
 
         notesState.editingNoteId = null;
@@ -1364,6 +1415,10 @@ async function setPublished(noteId, published) {
 
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Unable to update publishing status.");
+
+        if (data.publishPending) {
+            showAppNotice("Publishing is queued. This note will go public automatically when the security scan passes.");
+        }
 
         await loadNotes();
         if (notesState.activeView === "explore") await loadPublicNotes();
