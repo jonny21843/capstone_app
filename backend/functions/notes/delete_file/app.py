@@ -51,6 +51,12 @@ def lambda_handler(event, context):
     if not note:
         return response(404, {"error": "Note not found"})
 
+    if note.get("visibility") == "public":
+        return response(
+            409,
+            {"error": "Unpublish this note before removing a source file"},
+        )
+
     files = note.get("files") or []
     target_index = next(
         (index for index, item in enumerate(files) if item.get("fileId") == file_id),
