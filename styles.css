@@ -1021,3 +1021,38 @@ h3 {
         flex-direction: column;
     }
 }
+
+
+.settings-profile-card {
+    padding: 20px 24px;
+}
+
+.settings-profile-card .card-heading {
+    align-items: flex-start;
+}
+
+.settings-profile-card .card-heading p {
+    margin-bottom: 0;
+}
+
+.settings-profile-card .note-form {
+    margin-top: 14px;
+}
+
+.settings-profile-card .form-grid {
+    margin-top: 0;
+}
+
+.settings-profile-card .profile-preview {
+    margin: 10px 0 0;
+}
+
+.settings-profile-card .form-actions {
+    margin-top: 12px;
+}
+
+@media (min-width: 760px) {
+    .settings-profile-card .form-actions {
+        justify-content: flex-end;
+    }
+}
