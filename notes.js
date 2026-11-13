@@ -192,7 +192,8 @@ const notesState = {
     publicPageSize: 18,
     profile: null,
     uploadFeedback: {},
-    isAdmin: false
+    isAdmin: false,
+    dismissedEmptyCreate: false
 };
 
 function apiUrl(path) {
@@ -562,14 +563,26 @@ function renderNotes() {
 
     if (notesState.notes.length === 0) {
         status.hidden = true;
+
+        if (!notesState.dismissedEmptyCreate) {
+            document.getElementById("note-form-title").textContent = "Create your first note";
+            document.getElementById("note-form-submit").textContent = "Create Note";
+            setCreateStatus("");
+            showCreatePanel(true);
+            return;
+        }
+
         const empty = document.createElement("div");
         empty.className = "empty-state";
         empty.innerHTML = `
-            <h3>No notes yet</h3>
-            <p>Create your first note, add a description, and upload a source file.</p>
+            <h3>Your library is ready</h3>
+            <p>Create your first note whenever you are ready to start publishing or organizing study material.</p>
             <button class="button button-primary" type="button">+ Create Your First Note</button>
         `;
-        empty.querySelector("button").addEventListener("click", () => showCreatePanel(true));
+        empty.querySelector("button").addEventListener("click", () => {
+            notesState.dismissedEmptyCreate = false;
+            showCreatePanel(true);
+        });
         grid.appendChild(empty);
         return;
     }
@@ -855,6 +868,7 @@ async function createNote(event) {
         }
 
         notesState.editingNoteId = null;
+        notesState.dismissedEmptyCreate = false;
         form.reset();
         showCreatePanel(false);
         await loadNotes();
@@ -1503,6 +1517,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("analytics-tab").addEventListener("click", () => setActiveView("analytics"));
     document.getElementById("refresh-analytics").addEventListener("click", loadAdminAnalytics);
     document.getElementById("new-note-btn").addEventListener("click", () => {
+        notesState.dismissedEmptyCreate = false;
         notesState.editingNoteId = null;
         document.getElementById("create-note-form").reset();
         document.getElementById("note-form-title").textContent = "Create a note";
@@ -1510,7 +1525,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         setCreateStatus("");
         showCreatePanel(true);
     });
-    document.getElementById("cancel-note-btn").addEventListener("click", () => showCreatePanel(false));
+    document.getElementById("cancel-note-btn").addEventListener("click", () => {
+        if (notesState.notes.length === 0) {
+            notesState.dismissedEmptyCreate = true;
+        }
+        showCreatePanel(false);
+        if (notesState.notes.length === 0) {
+            renderNotes();
+        }
+    });
     document.getElementById("profile-form").addEventListener("submit", saveProfile);
     document.getElementById("settings-profile-form").addEventListener("submit", saveSettingsProfile);
     document.getElementById("create-note-form").addEventListener("submit", createNote);
