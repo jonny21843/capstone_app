@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: Serverless API foundation for the Notes App.
+Description: Serverless API foundation for StudyGrounds.
 
 Parameters:
   CognitoUserPoolId:
@@ -64,6 +64,8 @@ Resources:
         CorsRules:
           - AllowedOrigins:
               - http://localhost:8080
+              - https://joinstudygrounds.com
+              - https://www.joinstudygrounds.com
             AllowedMethods:
               - PUT
               - POST
@@ -94,6 +96,8 @@ Resources:
       CorsConfiguration:
         AllowOrigins:
           - http://localhost:8080
+          - https://joinstudygrounds.com
+          - https://www.joinstudygrounds.com
         AllowHeaders:
           - Authorization
           - Content-Type
