@@ -969,7 +969,7 @@ async function loadAdminAnalytics() {
         }
 
         renderAnalyticsList("analytics-subjects", data.topSubjects || [], "No subjects yet.");
-        renderAnalyticsList("analytics-collections", data.topCollections || [], "No collections yet.");
+        renderAnalyticsList("analytics-collections", data.topCollections || [], "No topics yet.");
 
         const recent = document.getElementById("analytics-recent");
         if (!(data.recentPublished || []).length) {
@@ -1025,7 +1025,7 @@ function renderActivePublicFilters(query, subject, collection, sort) {
 
     if (query) items.push(`Search: ${query}`);
     if (subject) items.push(`Subject: ${subject}`);
-    if (collection) items.push(`Collection: ${collection}`);
+    if (collection) items.push(`Topic: ${collection}`);
     if (sort && sort !== "newest") {
         const labels = {
             oldest: "Oldest",
@@ -1086,7 +1086,7 @@ async function loadPublicNotes() {
         }
 
         if (collectionSelect.options.length <= 1 || currentCollection === "") {
-            const collectionOptions = ['<option value="">All collections</option>']
+            const collectionOptions = ['<option value="">All topics</option>']
                 .concat(
                     (data.collections || []).map(
                         (item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`
