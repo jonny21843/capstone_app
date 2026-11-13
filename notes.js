@@ -320,7 +320,8 @@ const notesState = {
     profile: null,
     uploadFeedback: {},
     isAdmin: false,
-    dismissedEmptyCreate: false
+    dismissedEmptyCreate: false,
+    selectedSecurityUserId: null
 };
 
 function apiUrl(path) {
@@ -479,15 +480,19 @@ function setActiveView(view) {
     document.getElementById("explore-view").hidden = view !== "explore";
     document.getElementById("settings-view").hidden = view !== "settings";
     document.getElementById("analytics-view").hidden = view !== "analytics";
+    document.getElementById("security-view").hidden = view !== "security";
     document.getElementById("my-notes-tab").classList.toggle("active", view === "my-notes");
     document.getElementById("explore-tab").classList.toggle("active", view === "explore");
     document.getElementById("settings-tab").classList.toggle("active", view === "settings");
     document.getElementById("analytics-tab").classList.toggle("active", view === "analytics");
+    document.getElementById("security-tab").classList.toggle("active", view === "security");
 
     if (view === "explore") {
         loadPublicNotes();
     } else if (view === "analytics") {
         loadAdminAnalytics();
+    } else if (view === "security") {
+        loadAdminSecurity();
     }
 }
 
@@ -505,14 +510,16 @@ function renderSignedInState() {
     const myNotesTab = document.getElementById("my-notes-tab");
     const settingsTab = document.getElementById("settings-tab");
     const analyticsTab = document.getElementById("analytics-tab");
+    const securityTab = document.getElementById("security-tab");
 
     signedOutPanel.hidden = signedIn;
     notesApp.hidden = !signedIn;
     myNotesTab.hidden = !signedIn;
     settingsTab.hidden = !signedIn;
     analyticsTab.hidden = !signedIn || !isConfiguredAdmin();
+    securityTab.hidden = !signedIn || !isConfiguredAdmin();
 
-    if (!signedIn && ["my-notes", "settings", "analytics"].includes(notesState.activeView)) {
+    if (!signedIn && ["my-notes", "settings", "analytics", "security"].includes(notesState.activeView)) {
         setActiveView("explore");
     }
 }
@@ -1781,11 +1788,13 @@ async function probeAdminAccess() {
         if (response.status === 403) {
             notesState.isAdmin = false;
             document.getElementById("analytics-tab").hidden = true;
+            document.getElementById("security-tab").hidden = true;
             return false;
         }
         if (!response.ok) return false;
         notesState.isAdmin = true;
         document.getElementById("analytics-tab").hidden = !isConfiguredAdmin();
+        document.getElementById("security-tab").hidden = !isConfiguredAdmin();
         return true;
     } catch (error) {
         console.error("Unable to check admin analytics access:", error);
@@ -1883,6 +1892,222 @@ async function loadAdminAnalytics() {
         content.hidden = false;
     } catch (error) {
         status.textContent = error.message || "Unable to load analytics.";
+        status.style.color = "#b42318";
+    }
+}
+
+
+function securityStatusLabel(user) {
+    const status = user?.accountSecurityStatus || "ACTIVE";
+    if (status === "DISABLED") return "Disabled";
+    if (status === "RESTRICTED") return "Restricted";
+    if (status === "REVIEW_REQUIRED") return "Needs review";
+    return "Active";
+}
+
+function securityStatusClass(user) {
+    const status = user?.accountSecurityStatus || "ACTIVE";
+    if (status === "DISABLED") return "disabled";
+    if (status === "RESTRICTED") return "restricted";
+    if (status === "REVIEW_REQUIRED") return "review";
+    return "active";
+}
+
+function formatSecurityDateTime(value) {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "—";
+    return new Intl.DateTimeFormat(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit"
+    }).format(date);
+}
+
+function renderSecurityUsers(users) {
+    const container = document.getElementById("security-users");
+    if (!users?.length) {
+        container.innerHTML = '<p class="note-description">No security incidents or account restrictions have been recorded.</p>';
+        return;
+    }
+
+    container.innerHTML = users.map((user) => {
+        const statusClass = securityStatusClass(user);
+        const email = user.email || user.userId || "Unknown user";
+        const restrictionBits = [];
+        if (user.uploadBlocked || user.uploadBlockedUntil) restrictionBits.push("uploads");
+        if (user.publishingBlocked) restrictionBits.push("publishing");
+        if (user.cognitoEnabled === false) restrictionBits.push("account");
+
+        return `
+            <button class="security-user-row" type="button" data-security-user="${escapeHtml(user.userId)}">
+                <div class="security-user-main">
+                    <div class="security-user-heading">
+                        <strong>${escapeHtml(email)}</strong>
+                        <span class="security-badge ${statusClass}">${escapeHtml(securityStatusLabel(user))}</span>
+                    </div>
+                    <span>${Number(user.malwareStrikeCount30d || 0)} strike${Number(user.malwareStrikeCount30d || 0) === 1 ? "" : "s"} / 30 days</span>
+                </div>
+                <div class="security-user-meta">
+                    <span>${restrictionBits.length ? `Blocked: ${restrictionBits.join(", ")}` : "No active block"}</span>
+                    <span>Last incident: ${escapeHtml(formatSecurityDateTime(user.lastMalwareAt))}</span>
+                </div>
+            </button>
+        `;
+    }).join("");
+
+    container.querySelectorAll("[data-security-user]").forEach((button) => {
+        button.addEventListener("click", () => loadSecurityUser(button.dataset.securityUser));
+    });
+}
+
+function renderSecurityUserDetail(data) {
+    const user = data.user || {};
+    notesState.selectedSecurityUserId = user.userId || null;
+
+    const detail = document.getElementById("security-user-detail");
+    const email = user.email || user.userId || "Unknown user";
+    document.getElementById("security-detail-title").textContent = email;
+    document.getElementById("security-detail-subtitle").textContent =
+        `${securityStatusLabel(user)} · ${Number(user.malwareStrikeCount30d || 0)} strike${Number(user.malwareStrikeCount30d || 0) === 1 ? "" : "s"} in the last 30 days`;
+
+    const summary = document.getElementById("security-detail-summary");
+    summary.innerHTML = `
+        <div><span>Status</span><strong class="security-badge ${securityStatusClass(user)}">${escapeHtml(securityStatusLabel(user))}</strong></div>
+        <div><span>Uploads</span><strong>${user.uploadBlocked || user.uploadBlockedUntil ? "Blocked" : "Allowed"}</strong></div>
+        <div><span>Publishing</span><strong>${user.publishingBlocked ? "Blocked" : "Allowed"}</strong></div>
+        <div><span>Cognito account</span><strong>${user.cognitoEnabled === false ? "Disabled" : "Enabled"}</strong></div>
+        <div><span>Last malware</span><strong>${escapeHtml(formatSecurityDateTime(user.lastMalwareAt))}</strong></div>
+        <div><span>Upload pause until</span><strong>${escapeHtml(formatSecurityDateTime(user.uploadBlockedUntil))}</strong></div>
+    `;
+
+    document.getElementById("security-reenable-account").disabled = user.cognitoEnabled !== false;
+    document.getElementById("security-disable-account").disabled = user.cognitoEnabled === false;
+    document.getElementById("security-restore-access").disabled =
+        !user.uploadBlocked && !user.uploadBlockedUntil && !user.publishingBlocked && !user.reviewRequired;
+    document.getElementById("security-forgive-strikes").disabled =
+        Number(user.malwareStrikeCount30d || 0) === 0;
+
+    const incidents = document.getElementById("security-incidents");
+    if (!(data.incidents || []).length) {
+        incidents.innerHTML = '<p class="note-description">No incidents recorded.</p>';
+    } else {
+        incidents.innerHTML = data.incidents.map((incident) => `
+            <article class="security-history-item">
+                <div class="security-history-heading">
+                    <strong>${escapeHtml(incident.filename || "Source file")}</strong>
+                    <span class="security-badge ${incident.forgiven ? "active" : "review"}">${incident.forgiven ? "Forgiven" : "Threat found"}</span>
+                </div>
+                <span>${escapeHtml(incident.noteTitle || "Deleted note")}</span>
+                <span>${escapeHtml(formatSecurityDateTime(incident.detectedAt))}</span>
+                ${incident.forgiven ? `<small>Forgiven ${escapeHtml(formatSecurityDateTime(incident.forgivenAt))} by ${escapeHtml(incident.forgivenBy || "admin")}</small>` : ""}
+            </article>
+        `).join("");
+    }
+
+    const audit = document.getElementById("security-audit");
+    if (!(data.audit || []).length) {
+        audit.innerHTML = '<p class="note-description">No admin actions recorded.</p>';
+    } else {
+        audit.innerHTML = data.audit.map((item) => `
+            <article class="security-history-item">
+                <div class="security-history-heading">
+                    <strong>${escapeHtml(String(item.action || "").replaceAll("_", " "))}</strong>
+                </div>
+                <span>${escapeHtml(item.adminEmail || "Admin")}</span>
+                <span>${escapeHtml(formatSecurityDateTime(item.createdAt))}</span>
+            </article>
+        `).join("");
+    }
+
+    detail.hidden = false;
+    detail.scrollIntoView({behavior: "smooth", block: "start"});
+}
+
+async function loadSecurityUser(userId) {
+    if (!userId) return;
+
+    try {
+        const response = await adminFetch(`/api/admin/security/${encodeURIComponent(userId)}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Unable to load security details.");
+        renderSecurityUserDetail(data);
+    } catch (error) {
+        showAppNotice(error.message || "Unable to load security details.", "error", 6500);
+    }
+}
+
+async function applySecurityAction(action) {
+    const userId = notesState.selectedSecurityUserId;
+    if (!userId) return;
+
+    const messages = {
+        restore_access: "Restore uploads and publishing for this account? Existing incident history and strikes will remain.",
+        forgive_strikes: "Forgive this account's current strikes? Incident history will remain in the audit record.",
+        reenable_account: "Re-enable this Cognito account and restore StudyGrounds access?",
+        disable_account: "Disable this Cognito account and block uploads and publishing?"
+    };
+    if (!window.confirm(messages[action] || "Apply this security action?")) return;
+
+    try {
+        const response = await adminFetch(`/api/admin/security/${encodeURIComponent(userId)}`, {
+            method: "PATCH",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({action})
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Unable to apply security action.");
+
+        renderSecurityUserDetail(data);
+        await loadAdminSecurity(false);
+        showAppNotice("Security action applied and recorded in the audit trail.", "success", 5200);
+    } catch (error) {
+        showAppNotice(error.message || "Unable to apply security action.", "error", 7000);
+    }
+}
+
+async function loadAdminSecurity(hideDetail = true) {
+    const status = document.getElementById("security-status");
+    const content = document.getElementById("security-content");
+    status.hidden = false;
+    status.textContent = "Loading security records...";
+    status.style.color = "";
+    content.hidden = true;
+
+    if (hideDetail) {
+        document.getElementById("security-user-detail").hidden = true;
+        notesState.selectedSecurityUserId = null;
+    }
+
+    try {
+        const response = await adminFetch("/api/admin/security");
+        const data = await response.json();
+
+        if (response.status === 403) {
+            notesState.isAdmin = false;
+            document.getElementById("analytics-tab").hidden = true;
+            document.getElementById("security-tab").hidden = true;
+            setActiveView("my-notes");
+            return;
+        }
+
+        if (!response.ok) {
+            throw new Error(data.error || `Unable to load security records (HTTP ${response.status}).`);
+        }
+
+        const metrics = data.metrics || {};
+        document.getElementById("security-metric-review").textContent = Number(metrics.reviewRequired || 0);
+        document.getElementById("security-metric-restricted").textContent = Number(metrics.restricted || 0);
+        document.getElementById("security-metric-disabled").textContent = Number(metrics.disabled || 0);
+        document.getElementById("security-metric-strikes").textContent = Number(metrics.strikes30d || 0);
+        renderSecurityUsers(data.users || []);
+
+        status.hidden = true;
+        content.hidden = false;
+    } catch (error) {
+        status.textContent = error.message || "Unable to load security records.";
         status.style.color = "#b42318";
     }
 }
@@ -2230,7 +2455,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     document.getElementById("settings-tab").addEventListener("click", () => setActiveView("settings"));
     document.getElementById("analytics-tab").addEventListener("click", () => setActiveView("analytics"));
+    document.getElementById("security-tab").addEventListener("click", () => setActiveView("security"));
     document.getElementById("refresh-analytics").addEventListener("click", loadAdminAnalytics);
+    document.getElementById("refresh-security").addEventListener("click", () => loadAdminSecurity());
+    document.getElementById("close-security-detail").addEventListener("click", () => {
+        document.getElementById("security-user-detail").hidden = true;
+        notesState.selectedSecurityUserId = null;
+    });
+    document.getElementById("security-restore-access").addEventListener("click", () => applySecurityAction("restore_access"));
+    document.getElementById("security-forgive-strikes").addEventListener("click", () => applySecurityAction("forgive_strikes"));
+    document.getElementById("security-reenable-account").addEventListener("click", () => applySecurityAction("reenable_account"));
+    document.getElementById("security-disable-account").addEventListener("click", () => applySecurityAction("disable_account"));
     document.getElementById("new-note-btn").addEventListener("click", () => {
         notesState.dismissedEmptyCreate = false;
         notesState.editingNoteId = null;
@@ -2342,10 +2577,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.getElementById("my-notes-view").hidden = true;
         document.getElementById("settings-view").hidden = true;
         document.getElementById("analytics-view").hidden = true;
+        document.getElementById("security-view").hidden = true;
         document.getElementById("explore-view").hidden = false;
         document.getElementById("my-notes-tab").classList.remove("active");
         document.getElementById("settings-tab").classList.remove("active");
         document.getElementById("analytics-tab").classList.remove("active");
+        document.getElementById("security-tab").classList.remove("active");
         document.getElementById("explore-tab").classList.add("active");
         await openPublicNote(sharedNoteId, false);
     }
