@@ -1,0 +1,120 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: StudyGrounds Cognito authentication stack.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    AllowedValues:
+      - dev
+      - prod
+    Default: prod
+
+  DomainPrefix:
+    Type: String
+    Description: Globally unique Cognito hosted UI prefix, for example studygrounds-prod-auth.
+
+  SiteUrl:
+    Type: String
+    Default: https://joinstudygrounds.com
+
+  AdditionalCallbackUrl:
+    Type: String
+    Default: ""
+    Description: Optional temporary callback URL used during environment cutover/testing.
+
+  AdditionalLogoutUrl:
+    Type: String
+    Default: ""
+    Description: Optional temporary logout URL used during environment cutover/testing.
+
+Conditions:
+  HasAdditionalCallbackUrl: !Not [!Equals [!Ref AdditionalCallbackUrl, ""]]
+  HasAdditionalLogoutUrl: !Not [!Equals [!Ref AdditionalLogoutUrl, ""]]
+
+Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "studygrounds-${EnvironmentName}-users"
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      UsernameConfiguration:
+        CaseSensitive: false
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          TemporaryPasswordValidityDays: 7
+      Schema:
+        - Name: given_name
+          AttributeDataType: String
+          Mutable: true
+          Required: false
+        - Name: family_name
+          AttributeDataType: String
+          Mutable: true
+          Required: false
+      UserPoolTags:
+        Application: StudyGrounds
+        Environment: !Ref EnvironmentName
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "studygrounds-${EnvironmentName}-web"
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      PreventUserExistenceErrors: ENABLED
+      EnableTokenRevocation: true
+      SupportedIdentityProviders:
+        - COGNITO
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - openid
+        - email
+        - profile
+      CallbackURLs:
+        - !Sub "${SiteUrl}/auth/callback.html"
+        - !If
+          - HasAdditionalCallbackUrl
+          - !Ref AdditionalCallbackUrl
+          - !Ref "AWS::NoValue"
+      LogoutURLs:
+        - !Sub "${SiteUrl}/"
+        - !If
+          - HasAdditionalLogoutUrl
+          - !Ref AdditionalLogoutUrl
+          - !Ref "AWS::NoValue"
+      ExplicitAuthFlows:
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Ref DomainPrefix
+      UserPoolId: !Ref UserPool
+
+Outputs:
+  UserPoolId:
+    Value: !Ref UserPool
+
+  UserPoolClientId:
+    Value: !Ref UserPoolClient
+
+  CognitoDomainHost:
+    Value: !Sub "${DomainPrefix}.auth.${AWS::Region}.amazoncognito.com"
+
+  CognitoDomainUrl:
+    Value: !Sub "https://${DomainPrefix}.auth.${AWS::Region}.amazoncognito.com"
