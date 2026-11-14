@@ -3,6 +3,30 @@ Transform: AWS::Serverless-2016-10-31
 Description: Serverless API foundation for StudyGrounds.
 
 Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+
+  ResourceNamePrefix:
+    Type: String
+    Default: ""
+    Description: Optional explicit resource prefix. Leave blank for the existing DEV stack to preserve generated names; use studygrounds-prod for clean production names.
+
+  SiteUrl:
+    Type: String
+    Default: https://dev.joinstudygrounds.com
+
+  AllowedOrigins:
+    Type: CommaDelimitedList
+    Default: http://localhost:8080,https://dev.joinstudygrounds.com
+
+  EmailSubjectPrefix:
+    Type: String
+    Default: "[StudyGrounds DEV]"
+
   CognitoUserPoolId:
     Type: String
     Default: us-east-2_sZ3qWdfwv
@@ -21,10 +45,14 @@ Parameters:
     Default: https://d84l1y8p4kdic.cloudfront.net
     Description: Legacy saved deploy parameter; not used during localhost development.
 
+Conditions:
+  UseExplicitResourceNames: !Not [!Equals [!Ref ResourceNamePrefix, ""]]
+
 Resources:
   NotesTable:
     Type: AWS::DynamoDB::Table
     Properties:
+      TableName: !If [UseExplicitResourceNames, !Sub "${ResourceNamePrefix}-notes", !Ref "AWS::NoValue"]
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: userId
@@ -51,6 +79,7 @@ Resources:
   UserSecurityTable:
     Type: AWS::DynamoDB::Table
     Properties:
+      TableName: !If [UseExplicitResourceNames, !Sub "${ResourceNamePrefix}-security", !Ref "AWS::NoValue"]
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: pk
@@ -70,6 +99,7 @@ Resources:
   NotesBucket:
     Type: AWS::S3::Bucket
     Properties:
+      BucketName: !If [UseExplicitResourceNames, !Sub "${ResourceNamePrefix}-uploads-${AWS::AccountId}-${AWS::Region}", !Ref "AWS::NoValue"]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         IgnorePublicAcls: true
@@ -81,10 +111,7 @@ Resources:
               SSEAlgorithm: AES256
       CorsConfiguration:
         CorsRules:
-          - AllowedOrigins:
-              - http://localhost:8080
-              - https://joinstudygrounds.com
-              - https://www.joinstudygrounds.com
+          - AllowedOrigins: !Ref AllowedOrigins
             AllowedMethods:
               - PUT
               - POST
@@ -194,10 +221,7 @@ Resources:
           ThrottlingBurstLimit: 4
           ThrottlingRateLimit: 2
       CorsConfiguration:
-        AllowOrigins:
-          - http://localhost:8080
-          - https://joinstudygrounds.com
-          - https://www.joinstudygrounds.com
+        AllowOrigins: !Ref AllowedOrigins
         AllowHeaders:
           - Authorization
           - Content-Type
@@ -609,7 +633,8 @@ Resources:
           COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
           ADMIN_EMAILS: !Ref AdminEmails
           SES_FROM_EMAIL: "StudyGrounds <notifications@joinstudygrounds.com>"
-          APP_URL: "https://joinstudygrounds.com"
+          APP_URL: !Ref SiteUrl
+          EMAIL_SUBJECT_PREFIX: !Ref EmailSubjectPrefix
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref NotesTable
@@ -649,7 +674,7 @@ Resources:
       Environment:
         Variables:
           NOTES_TABLE: !Ref NotesTable
-          SITE_URL: "https://joinstudygrounds.com"
+          SITE_URL: !Ref SiteUrl
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref NotesTable
@@ -738,6 +763,9 @@ Resources:
               Authorizer: NONE
 
 Outputs:
+  EnvironmentName:
+    Value: !Ref EnvironmentName
+
   ApiBaseUrl:
     Description: Base URL for the Notes App HTTP API.
     Value: !Sub "https://${NotesApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}"
