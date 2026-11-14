@@ -2,6 +2,18 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: Secure StudyGrounds frontend hosting with private S3 and CloudFront.
 
 Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+
+  FrontendBucketName:
+    Type: String
+    Default: ""
+    Description: Optional explicit S3 bucket name. Leave blank for the existing DEV stack.
+
   CertificateArn:
     Type: String
     Description: ACM certificate ARN in us-east-1 covering joinstudygrounds.com and www.joinstudygrounds.com.
@@ -12,17 +24,27 @@ Parameters:
 
   WwwDomainName:
     Type: String
-    Default: www.joinstudygrounds.com
+    Default: ""
 
   ApiDomainName:
     Type: String
     Default: nxa9uz2cv0.execute-api.us-east-2.amazonaws.com
     Description: API Gateway hostname used for crawlable public note pages and the dynamic sitemap.
 
+  CognitoDomainName:
+    Type: String
+    Default: us-east-2sz3qwdfwv.auth.us-east-2.amazoncognito.com
+    Description: Cognito hosted UI hostname allowed by the frontend CSP.
+
+Conditions:
+  HasWwwDomain: !Not [!Equals [!Ref WwwDomainName, ""]]
+  HasExplicitFrontendBucketName: !Not [!Equals [!Ref FrontendBucketName, ""]]
+
 Resources:
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
+      BucketName: !If [HasExplicitFrontendBucketName, !Ref FrontendBucketName, !Ref "AWS::NoValue"]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         IgnorePublicAcls: true
@@ -61,7 +83,7 @@ Resources:
               script-src 'self';
               style-src 'self';
               img-src 'self' data: blob: https://s3.us-east-2.amazonaws.com https://*.s3.us-east-2.amazonaws.com;
-              connect-src 'self' https://nxa9uz2cv0.execute-api.us-east-2.amazonaws.com https://us-east-2sz3qwdfwv.auth.us-east-2.amazoncognito.com https://s3.us-east-2.amazonaws.com https://*.s3.us-east-2.amazonaws.com;
+              connect-src 'self' https://${ApiDomainName} https://${CognitoDomainName} https://s3.us-east-2.amazonaws.com https://*.s3.us-east-2.amazonaws.com;
               frame-src 'self' blob: https://s3.us-east-2.amazonaws.com https://*.s3.us-east-2.amazonaws.com;
               object-src 'none';
               base-uri 'self';
@@ -157,10 +179,10 @@ Resources:
     Properties:
       DistributionConfig:
         Enabled: true
-        Comment: StudyGrounds production frontend
+        Comment: !Sub "StudyGrounds ${EnvironmentName} frontend"
         Aliases:
           - !Ref DomainName
-          - !Ref WwwDomainName
+          - !If [HasWwwDomain, !Ref WwwDomainName, !Ref "AWS::NoValue"]
         DefaultRootObject: index.html
         HttpVersion: http2and3
         IPV6Enabled: true
@@ -263,5 +285,5 @@ Outputs:
     Description: Point Cloudflare CNAME records to this hostname.
     Value: !GetAtt FrontendDistribution.DomainName
 
-  ProductionUrl:
+  SiteUrl:
     Value: !Sub "https://${DomainName}"
